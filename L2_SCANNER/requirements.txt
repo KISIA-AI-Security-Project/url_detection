@@ -1,0 +1,8 @@
+# L2 Scanner 런타임 의존성 (Python 3.13 기준)
+httpx==0.28.1            # HTTP 클라이언트 — follow_redirects=False로 hop 단위 리다이렉트 제어
+python-magic-bin==0.4.14 # magic bytes 판독 (Windows용 libmagic 동봉판. Linux 배포 시 python-magic + libmagic1로 교체)
+tldextract==5.3.2        # eTLD+1 추출 (Public Suffix List 기반)
+cryptography==50.0.0     # X.509 인증서 파싱 (subject/issuer/SAN/유효기간/fingerprint)
+
+# 개발·테스트 의존성
+pytest==9.1.1
