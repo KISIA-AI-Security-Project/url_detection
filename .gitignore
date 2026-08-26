@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 가상환경 (requirements.txt로 재생성)
+venv/
+.venv/
+
+# 에디터·도구 로컬 설정
+.claude/
+.vscode/
+.idea/
+
+# 내부 문서 (GitHub 공개 제외 — 팀 리뷰는 코드 위주)
+docs/
