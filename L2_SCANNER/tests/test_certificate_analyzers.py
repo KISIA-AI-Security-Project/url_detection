@@ -1,4 +1,4 @@
-"""Certificate Analyzer 6종 단위 테스트 — 가짜 TLS·CT Raw Data 주입, 네트워크 없음."""
+"""Certificate Analyzer 6종 단위 테스트 — 가짜 TLS, CT Raw Data 주입, 네트워크 없음."""
 from datetime import datetime, timedelta, timezone
 
 from analyzers.certificate import (
@@ -37,6 +37,7 @@ def make_tls(**overrides) -> dict:
             "not_after": days_later(90),
             "san": ["www.example.com", "example.com"],
             "sct_timestamps": [days_ago(365)],
+            "self_signed": False,   # Collector가 서명 실검증으로 채우는 필드 (CA 발급 = false)
         },
         "certificate_chain": [{"subject": "leaf"}, {"subject": "intermediate"}, {"subject": "root"}],
         "chain_valid": True,
@@ -74,8 +75,9 @@ class TestCertificateAge:
         assert signal["evidence"] == {"age_days": 2, "fresh": True}
 
     def test_unknown_when_no_certificate(self):
+        # 인증서를 못 봤으면 판정 불가 → null (팀 리뷰 반영: 검사 불가 ≠ "fresh 아님")
         signal = certificate_age.analyze(no_tls())
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"] == {"age_days": None, "fresh": None}
 
     def test_future_not_before_is_not_fresh(self):
@@ -108,7 +110,7 @@ class TestCertificateValidity:
 
     def test_unknown_when_no_certificate(self):
         signal = certificate_validity.analyze(no_tls())
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"]["status"] is None
 
 
@@ -160,7 +162,7 @@ class TestHostnameMatch:
 
     def test_unknown_when_no_certificate(self):
         signal = hostname_match.analyze(no_tls())
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"]["matched"] is None
 
 
@@ -171,15 +173,27 @@ class TestSelfSigned:
         assert self_signed.analyze(make_tls())["detected"] is False
 
     def test_self_signed_detected(self):
+        # Collector가 서명 실검증으로 확인한 자체 서명 (팀 리뷰 반영: 이름 비교 아님)
         same = "CN=myserver,O=Home"
-        tls = make_tls(leaf_certificate={"subject": same, "issuer": same})
+        tls = make_tls(leaf_certificate={"subject": same, "issuer": same, "self_signed": True})
         signal = self_signed.analyze(tls)
         assert signal["detected"] is True
         assert signal["evidence"]["subject"] == signal["evidence"]["issuer"]
 
+    def test_same_name_but_foreign_signature_not_detected(self):
+        # 이름만 subject==issuer로 꾸미고 실제 서명은 다른 키 — 서명 검증이 걸러낸다
+        same = "CN=myserver,O=Home"
+        tls = make_tls(leaf_certificate={"subject": same, "issuer": same, "self_signed": False})
+        assert self_signed.analyze(tls)["detected"] is False
+
+    def test_unknown_when_verification_impossible(self):
+        # 미지원 알고리즘 등으로 Collector가 검증 못 한 경우 → null 그대로 전달
+        tls = make_tls(leaf_certificate={"self_signed": None})
+        assert self_signed.analyze(tls)["detected"] is None
+
     def test_unknown_when_no_certificate(self):
         signal = self_signed.analyze(no_tls())
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"] == {"subject": None, "issuer": None}
 
 
@@ -203,7 +217,7 @@ class TestCertificateChain:
 
     def test_unknown_when_tls_failed(self):
         signal = certificate_chain.analyze(no_tls())
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"] == {"valid": None, "chain_depth": None, "error": None}
 
 
@@ -242,14 +256,14 @@ class TestCtFirstSeen:
             first_seen=None, source=None, sct_count=0, log_entries=None,
             errors=[{"host": "crt.sh", "error": "crt.sh returned HTTP 502"}],
         ))
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"] == {"first_seen": None, "age_days": None, "fresh": None}
 
     def test_not_in_ct_reports_unknown_age(self):
         # SCT 없음 + crt.sh 조회는 성공했으나 CT에 없음 — first_seen이 없으니 age는 unknown
         signal = ct_first_seen.analyze(make_ct(
             first_seen=None, source=None, sct_count=0, log_entries=0))
-        assert signal["detected"] is False
+        assert signal["detected"] is None
         assert signal["evidence"] == {"first_seen": None, "age_days": None, "fresh": None}
 
     def test_future_first_seen_is_not_fresh(self):

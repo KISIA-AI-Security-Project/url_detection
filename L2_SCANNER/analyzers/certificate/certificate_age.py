@@ -16,8 +16,10 @@ detected는 fresh와 동일 — "최근 발급 패턴이 관측되었는가". �
 
 from datetime import datetime, timezone
 
-# '최근 발급'으로 볼 기준일 — 지식 데이터. 명세서에 기준값이 없어 초기값으로 두며 팀 협의 대상.
-FRESH_CERT_MAX_AGE_DAYS = 30
+# 최근 발급 기준일 - 지식 데이터는 config에서 관리 (C-06과 같은 값 공유)
+from config.knowledge import FRESH_CERT_MAX_AGE_DAYS
+
+SIGNAL = {"id": "L2-C-01", "scanner": "certificate", "name": "certificate_age"}
 
 
 def analyze(tls: dict) -> dict:
@@ -28,18 +30,16 @@ def analyze(tls: dict) -> dict:
     if leaf and leaf["not_before"]:
         not_before = datetime.fromisoformat(leaf["not_before"])
         age_days = (datetime.now(timezone.utc) - not_before).days
-        # 음수 age(= notBefore가 미래)는 '최근 발급'이 아니라 별개 이상 신호로,
-        # L2-C-02가 not_valid로 관측한다 → 여기서는 fresh로 치지 않는다
+        # 음수 age(= notBefore가 미래)는 최근 발급이 아니라 별개 이상 신호로,
+        # L2-C-02가 not_valid로 관측한다 -> 여기서는 fresh로 치지 않는다
         fresh = 0 <= age_days <= FRESH_CERT_MAX_AGE_DAYS
 
     return {
-        "id": "L2-C-01",
-        "scanner": "certificate",
-        "name": "certificate_age",
-        # 인증서를 못 봤으면(null) 미관측 false — unknown ≠ fresh
-        "detected": bool(fresh),
+        **SIGNAL,
+        # 인증서를 못 봤으면 판정 불가 -> null - unknown != fresh 아님
+        "detected": fresh,
         "evidence": {
             "age_days": age_days,
-            "fresh": fresh,      # 확인 못 했으면 null ("확인 안 됨" ≠ "아니다")
+            "fresh": fresh,      # 확인 못 했으면 null (확인 안 됨 != 아니다)
         },
     }

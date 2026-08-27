@@ -1,0 +1,38 @@
+# L2 Scanner CI — 단위 테스트 (네트워크 불필요, <1초)
+#
+# L2_SCANNER/ 가 바뀐 push·PR에서만 실행된다 (paths 필터).
+# 실행 위치는 L2_SCANNER/ 하위 (working-directory).
+
+name: L2 tests
+
+on:
+  push:
+    branches: [main]
+    paths: ["L2_SCANNER/**"]
+  pull_request:
+    paths: ["L2_SCANNER/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest              # 배포 환경(Linux)과 동일 
+    defaults:
+      run:
+        working-directory: L2_SCANNER
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"        # 필수 — ssl.get_verified_chain()이 3.13+ (certificate_collector)
+          cache: pip
+
+      # python-magic이 쓰는 시스템 libmagic — 배포 이미지에도 동일하게 필요
+      - name: Install libmagic
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # 단위 테스트 전체 — 설계상 네트워크가 필요 없어 CI에서 flaky 없이 돈다
+      - name: Run tests
+        run: python -m pytest tests -q

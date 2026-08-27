@@ -18,6 +18,30 @@ from urllib.parse import unquote, urlsplit
 import tldextract
 
 
+def _split_params(value: str) -> list[str]:
+    """헤더 값을 세미콜론으로 토큰 분리한다 — 단, 따옴표("...") 안의 세미콜론은 제외.
+
+    단순 value.split(";")은 filename="payload;evil.exe" 를 filename="payload 에서
+    잘라 진짜 확장자(.exe)를 놓친다. 브라우저는 따옴표를 존중해 payload;evil.exe로
+    저장하므로, 그 차이가 위험 확장자 탐지(L2-H-06/07)의 우회 통로가 된다. (팀 리뷰 반영)
+    한계: 따옴표 안 백슬래시 이스케이프(\\")까지는 다루지 않는다 — 관대한 파싱의 범위.
+    """
+    parts = []
+    buf = []
+    in_quotes = False
+    for ch in value:
+        if ch == '"':
+            in_quotes = not in_quotes
+            buf.append(ch)
+        elif ch == ";" and not in_quotes:
+            parts.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    parts.append("".join(buf))
+    return parts
+
+
 def parse_content_disposition(value: str) -> dict:
     """Content-Disposition 헤더 값에서 '처리 유형'과 '파일명'을 뽑는다.
 
@@ -45,7 +69,8 @@ def parse_content_disposition(value: str) -> dict:
     filename_star = None   # filename*= 확장 표기로 얻은 이름 (있으면 이쪽이 우선)
 
     # 세미콜론으로 토큰 분리: 'attachment; filename="a.exe"' → ["attachment", 'filename="a.exe"']
-    parts = [p.strip() for p in value.split(";")]
+    # 따옴표 안의 세미콜론(filename="a;b.exe")은 구분자가 아니다 — _split_params 참고
+    parts = [p.strip() for p in _split_params(value)]
 
     if parts:
         disp_type = parts[0].lower() or None   # 첫 토큰 = 유형. 대소문자 변형(Attachment) 흡수

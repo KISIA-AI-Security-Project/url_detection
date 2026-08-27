@@ -15,15 +15,20 @@ from collectors.certificate_collector import _parse_certificate
 from analyzers.certificate import self_signed, hostname_match
 
 
-def build_self_signed_der(common_name: str, san: list[str]) -> bytes:
-    """테스트용 자체 서명 인증서 1장을 DER로 생성한다 (subject == issuer)."""
+def build_self_signed_der(common_name: str, san: list[str],
+                          signing_key=None) -> bytes:
+    """테스트용 인증서 1장을 DER로 생성한다 (subject == issuer 이름).
+
+    signing_key를 따로 주면 '이름은 자체 서명처럼 꾸몄지만 실제 서명은 다른 키'인
+    위장 인증서가 된다 — 서명 실검증 테스트용.
+    """
     key = ec.generate_private_key(ec.SECP256R1())
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
     now = datetime.now(timezone.utc)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name)
-        .issuer_name(name)                      # 자기가 자기를 발급 = 자체 서명
+        .issuer_name(name)                      # 자기가 자기를 발급 = 자체 서명 (이름 기준)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now - timedelta(days=3))
@@ -32,7 +37,7 @@ def build_self_signed_der(common_name: str, san: list[str]) -> bytes:
             x509.SubjectAlternativeName([x509.DNSName(d) for d in san]),
             critical=False,
         )
-        .sign(key, hashes.SHA256())
+        .sign(signing_key or key, hashes.SHA256())
     )
     return cert.public_bytes(Encoding.DER)
 
@@ -60,6 +65,19 @@ class TestParseCertificate:
     def test_no_sct_extension_gives_empty_list(self):
         # 자체 서명 인증서에는 내장 SCT가 없다 → 빈 목록 (CT Collector가 crt.sh 폴백으로 감)
         assert self.parsed["sct_timestamps"] == []
+
+    def test_self_signed_verified_by_signature(self):
+        # 자기 키로 서명 + 이름 일치 → 서명 실검증으로 자체 서명 확정 (팀 리뷰 반영)
+        assert self.parsed["self_signed"] is True
+
+    def test_forged_issuer_name_fails_signature_check(self):
+        # 이름은 subject==issuer로 꾸몄지만 실제 서명은 다른 키 —
+        # 문자열 비교라면 자체 서명으로 오인하지만 서명 검증은 걸러낸다
+        other_key = ec.generate_private_key(ec.SECP256R1())
+        der = build_self_signed_der("fake.local", ["fake.local"], signing_key=other_key)
+        parsed = _parse_certificate(der)
+        assert parsed["subject"] == parsed["issuer"]    # 이름만 보면 자체 서명처럼 보인다
+        assert parsed["self_signed"] is False           # 서명 검증이 위장을 구분
 
     def test_feeds_self_signed_analyzer(self):
         # 파서 출력 → Analyzer 입력의 통합 경로 확인

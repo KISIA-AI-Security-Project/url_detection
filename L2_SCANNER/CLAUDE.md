@@ -36,21 +36,25 @@ scan(url)
 - **Analyzer**(`analyzers/header/`, `analyzers/certificate/`)는 Raw Data만 읽는 순수 로직 — 네트워크 접속 금지. 새 Analyzer가 네트워크가 필요해 보이면 먼저 Collector에 수집을 추가하는 게 맞는지 검토할 것.
 - 예외: `ct_first_seen`(L2-C-06)만 CT Raw Data를 읽으므로 `CERTIFICATE_ANALYZERS` 목록에 없고 `scan()`에서 따로 호출된다.
 
-**Analyzer 계약** — 모든 Analyzer는 `analyze(raw: dict) -> dict` 하나를 노출하고 다음 형식의 Signal을 반환한다:
+**Analyzer 계약** — 모든 Analyzer는 모듈 상단에 `SIGNAL = {"id", "scanner", "name"}` 상수를 노출하고, `analyze(raw: dict) -> dict` 하나로 다음 형식의 Signal을 반환한다:
 
 ```python
-{"id": "L2-H-03", "scanner": "header", "name": "redirect_to_ip",
- "detected": bool, "evidence": {...}}
+SIGNAL = {"id": "L2-H-03", "scanner": "header", "name": "redirect_to_ip"}
+# analyze() 반환: {**SIGNAL, "detected": True | False | None, "evidence": {...}}
 ```
 
-새 Analyzer 추가 시 `l2_scanner.py`의 `HEADER_ANALYZERS`/`CERTIFICATE_ANALYZERS` 목록에 **기능 번호 순서대로** 등록한다 (목록 순서 = 결과 JSON의 signals[] 순서).
+- `detected`는 3값: `True`(관측) / `False`(검사했고 미관측) / `None`(재료가 없어 검사 불가). 검사를 못 한 것을 `False`로 적지 않는다.
+- `SIGNAL` 상수는 Analyzer가 예외로 죽었을 때 `l2_scanner._run_analyzer`가 대체 Signal(detected null)을 만드는 뼈대이므로 생략 불가.
+
+새 Analyzer 추가 시 `l2_scanner.py`의 `HEADER_ANALYZERS`/`CERTIFICATE_ANALYZERS` 목록에 **기능 번호 순서대로** 등록한다 (목록 순서 = 결과 JSON의 signals[] 순서). Analyzer는 `_run_analyzer`로 격리 실행된다 — 하나가 예외를 내도 스캔 전체가 죽지 않고 해당 기능만 null Signal + errors[] 기록으로 대체된다.
 
 ## 프로젝트 원칙 (명세서 합의 사항)
 
 - **관측 ≠ 판정**: `detected`는 패턴 관측 여부일 뿐, 악성 판정은 상위 Rule Engine/LLM의 몫. Analyzer에 점수·판정 로직을 넣지 않는다.
-- **"확인 안 됨" ≠ "없음"**: 확인하지 못한 값은 `False`/`0`이 아니라 `null`(None)로 기록한다. (예: HTTPS 대상이 없으면 인증서 Signal은 unknown)
+- **"확인 안 됨" ≠ "없음"**: 확인하지 못한 값은 `False`/`0`이 아니라 `null`(None)로 기록한다. `detected`도 마찬가지 — 검사 자체가 불가하면 `null` (예: HTTPS 대상이 없으면 인증서 Signal 6종은 `detected: null`).
 - **검증 실패해도 관측은 보존**: Certificate Collector는 체인 검증 실패 시 검증 OFF로 재접속해 인증서 자체는 수집한다 — 자체 서명·만료 인증서가 곧 분석 대상이기 때문.
-- 조정값(타임아웃, 최대 hop 수 등)은 환경변수가 아니라 **각 Collector·Analyzer 상단 상수**로 둔다.
+- 바뀔 수 있는 상수는 환경변수가 아니라 **`config/` 패키지에서 성격별로** 관리한다 — `config/tuning.py`(타임아웃·상한 등 운영 조정값), `config/knowledge.py`(위험 확장자·단축 도메인 명단 등 지식 데이터). 프로토콜 의미론(REDIRECT_CODES 등)과 Analyzer의 SIGNAL 상수는 조정 대상이 아니므로 각 모듈에 남긴다.
+- 배포 환경은 **Linux 기준** (2026-08-27 팀 협의). requirements.txt의 win32 마커 줄은 로컬 개발(Windows) 편의용일 뿐이다.
 
 ## 코드 컨벤션
 
