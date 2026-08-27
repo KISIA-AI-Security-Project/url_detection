@@ -1,0 +1,65 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## 프로젝트 개요
+
+악성 URL 분석 파이프라인의 **L2(응답·통신 분석) 계층**. URL에 접속해 HTTP 통신·리다이렉트·TLS 인증서를 관측하고, 통합 명세서 10장 형식의 결과 JSON을 반환한다. KISIA 팀 프로젝트의 한 계층이며 **통합 명세서와 L2 기능 DB(L2-H-01~08, L2-C-01~06)가 최종 근거 문서**다 — 출력 형식·기능 범위를 바꿀 때는 명세서와 대조할 것.
+
+## 명령어
+
+Windows + venv 환경. 전역 python 대신 venv 실행 파일을 직접 호출한다:
+
+```powershell
+.\venv\Scripts\pip install -r requirements.txt        # 의존성 설치
+.\venv\Scripts\python -m pytest tests -q              # 전체 테스트 (네트워크 불필요)
+.\venv\Scripts\python -m pytest tests\test_header_analyzers.py -q   # 파일 하나
+.\venv\Scripts\python -m pytest tests -q -k redirect  # 이름으로 필터
+.\venv\Scripts\python main.py                         # 데모 (실제 네트워크 접속 — badssl 등 테스트 URL 스캔)
+```
+
+## 아키텍처
+
+전체 흐름은 `l2_scanner.py`의 `scan(url)` 한 함수로 요약된다:
+
+```
+scan(url)
+  → HTTP Collector (접속 1회: 리다이렉트 hop·헤더·바디)
+  → Certificate Collector (TLS handshake 1회 — HTTPS 대상 있을 때만)
+  → CT Collector (내장 SCT 우선, 없으면 crt.sh 폴백)
+  → Analyzer 14종이 Raw Data를 공유해 Signal 생성 (재접속 없음)
+  → 명세서 10장 형식 JSON 조립
+```
+
+**Collector와 Analyzer의 역할 분리가 핵심 설계다:**
+- **Collector**(`collectors/`)만 네트워크에 접속한다. 접속은 종류별 1회, 결과는 Raw Data dict.
+- **Analyzer**(`analyzers/header/`, `analyzers/certificate/`)는 Raw Data만 읽는 순수 로직 — 네트워크 접속 금지. 새 Analyzer가 네트워크가 필요해 보이면 먼저 Collector에 수집을 추가하는 게 맞는지 검토할 것.
+- 예외: `ct_first_seen`(L2-C-06)만 CT Raw Data를 읽으므로 `CERTIFICATE_ANALYZERS` 목록에 없고 `scan()`에서 따로 호출된다.
+
+**Analyzer 계약** — 모든 Analyzer는 `analyze(raw: dict) -> dict` 하나를 노출하고 다음 형식의 Signal을 반환한다:
+
+```python
+{"id": "L2-H-03", "scanner": "header", "name": "redirect_to_ip",
+ "detected": bool, "evidence": {...}}
+```
+
+새 Analyzer 추가 시 `l2_scanner.py`의 `HEADER_ANALYZERS`/`CERTIFICATE_ANALYZERS` 목록에 **기능 번호 순서대로** 등록한다 (목록 순서 = 결과 JSON의 signals[] 순서).
+
+## 프로젝트 원칙 (명세서 합의 사항)
+
+- **관측 ≠ 판정**: `detected`는 패턴 관측 여부일 뿐, 악성 판정은 상위 Rule Engine/LLM의 몫. Analyzer에 점수·판정 로직을 넣지 않는다.
+- **"확인 안 됨" ≠ "없음"**: 확인하지 못한 값은 `False`/`0`이 아니라 `null`(None)로 기록한다. (예: HTTPS 대상이 없으면 인증서 Signal은 unknown)
+- **검증 실패해도 관측은 보존**: Certificate Collector는 체인 검증 실패 시 검증 OFF로 재접속해 인증서 자체는 수집한다 — 자체 서명·만료 인증서가 곧 분석 대상이기 때문.
+- 조정값(타임아웃, 최대 hop 수 등)은 환경변수가 아니라 **각 Collector·Analyzer 상단 상수**로 둔다.
+
+## 코드 컨벤션
+
+- 주석·docstring은 한국어. 각 Analyzer 모듈은 상단 docstring에 `[목적]/[입력]/[출력]`과 설계 근거(왜 이 범위인지, 계층 간 역할 분리)를 기록한다 — 새 모듈도 이 형식을 따를 것.
+- 테스트는 가짜 Raw Data dict를 직접 만들어 `analyze()`에 주입한다 — 네트워크·mock 서버 없음. 기존 테스트 파일(`tests/test_header_analyzers.py` 등)의 패턴을 따를 것.
+- 설계 배경·리뷰 Q&A는 `docs/DESIGN_NOTES.md`, 기능별 상세는 `docs/HEADER_SCANNER.md`·`docs/CERTIFICATE_SCANNER.md`, 남은 작업은 `docs/REMAINING_WORK.md`에 있다. 설계 결정을 바꾸면 해당 문서도 갱신한다.
+
+## 미확정 사항 (팀 협의 대기 — 임의로 채우지 말 것)
+
+- `job_id`·`attempt_id` 등 시스템 공통 식별자 (Evidence 스키마 팀 확정 대기)
+- `scan.status` 세분화 (PARTIAL/BLOCKED 등 상태 Enum 팀 확정 대기)
+- User-Agent 최종 값, CT 외부 API 사용 여부
