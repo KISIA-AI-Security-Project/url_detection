@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
     branches: [main, dev]
 
@@ -8,11 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-test:
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: L2_SCANNER
+  discover-scanners:
+    name: Discover scanners
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
 
     steps:
       - name: Checkout repository
@@ -22,14 +24,91 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: L2_SCANNER/requirements.txt
 
+      - name: Build scanner matrix
+        id: build-matrix
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          scanners = [
+              {"scanner": "L2", "directory": "L2_SCANNER"},
+              {"scanner": "L3", "directory": "L3_SCANNER"},
+          ]
+          available = [
+              scanner
+              for scanner in scanners
+              if (Path(scanner["directory"]) / "requirements.txt").is_file()
+          ]
+
+          matrix = json.dumps({"include": available}, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"matrix={matrix}", file=output)
+
+  scanner-checks:
+    name: ${{ matrix.scanner }} checks
+    needs: discover-scanners
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover-scanners.outputs.matrix) }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+
+    steps:
+      # Common setup
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: ${{ matrix.directory }}/requirements.txt
+
+      # L2-specific setup
+      - name: Install L2 system dependencies
+        if: matrix.scanner == 'L2'
+        run: sudo apt-get update && sudo apt-get install -y libmagic1
+
+      # Common dependency setup
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
-      - name: Lint (syntax check)
+      # L3-specific setup
+      - name: Install L3 CI tools
+        if: matrix.scanner == 'L3'
+        run: python -m pip install pytest==9.1.1 mypy==1.17.1 ruff==0.12.0 pip-audit deptry
+
+      # Common checks
+      - name: Syntax check
         run: python -m compileall -q .
 
       - name: Unit tests
-        run: python -m pytest tests
+        run: python -m pytest tests -q
+
+      # L3-specific checks
+      - name: L3 lint
+        if: matrix.scanner == 'L3'
+        run: python -m ruff check .
+
+      - name: L3 format check
+        if: matrix.scanner == 'L3'
+        run: python -m ruff format --check .
+
+      - name: L3 type check
+        if: matrix.scanner == 'L3'
+        run: python -m mypy --config-file mypy.ini .
+
+      - name: L3 dependency vulnerability audit
+        if: matrix.scanner == 'L3'
+        run: python -m pip_audit -r requirements.txt
+
+      - name: L3 dependency usage check
+        if: matrix.scanner == 'L3'
+        run: python -m deptry .
