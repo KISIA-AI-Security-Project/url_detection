@@ -10,17 +10,50 @@ permissions:
   contents: read
 
 jobs:
+  discover-scanners:
+    name: Discover scanners
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Build scanner matrix
+        id: build-matrix
+        shell: python
+        run: |
+          import json
+          import os
+          from pathlib import Path
+
+          scanners = [
+              {"scanner": "L2", "directory": "L2_SCANNER"},
+              {"scanner": "L3", "directory": "L3_SCANNER"},
+          ]
+          available = [
+              scanner
+              for scanner in scanners
+              if (Path(scanner["directory"]) / "requirements.txt").is_file()
+          ]
+
+          matrix = json.dumps({"include": available}, separators=(",", ":"))
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              print(f"matrix={matrix}", file=output)
+
   scanner-checks:
     name: ${{ matrix.scanner }} checks
+    needs: discover-scanners
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - scanner: L2
-            directory: L2_SCANNER
-          - scanner: L3
-            directory: L3_SCANNER
+      matrix: ${{ fromJSON(needs.discover-scanners.outputs.matrix) }}
 
     defaults:
       run:
