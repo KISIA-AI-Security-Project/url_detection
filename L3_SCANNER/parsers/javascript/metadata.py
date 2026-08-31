@@ -3,8 +3,8 @@
 from hashlib import sha256
 from typing import Any, Mapping
 
-from ...models.input import ScriptInput
-from ...policies.detection import DetectionPolicy
+from L3_SCANNER.models.input import ScriptInput
+from L3_SCANNER.policies.detection import DetectionPolicy
 
 
 def script_metadata(script: ScriptInput) -> dict[str, Any]:

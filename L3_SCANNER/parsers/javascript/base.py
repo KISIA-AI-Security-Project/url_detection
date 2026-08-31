@@ -2,8 +2,8 @@
 
 from typing import Any, Iterable, Mapping
 
-from ...models.input import ScriptInput
-from ...policies.detection import DetectionPolicy
+from L3_SCANNER.models.input import ScriptInput
+from L3_SCANNER.policies.detection import DetectionPolicy
 from .models import Element, Eval, Taint, unique_lineage, unique_taints
 
 

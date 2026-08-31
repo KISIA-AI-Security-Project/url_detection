@@ -4,9 +4,9 @@ from typing import Any
 
 from bs4 import BeautifulSoup, NavigableString
 
-from ...models.raw import empty_html_raw
-from ...utils.hashing import sha256_text
-from ...utils.url import etld1
+from L3_SCANNER.models.raw import empty_html_raw
+from L3_SCANNER.utils.hashing import sha256_text
+from L3_SCANNER.utils.url import etld1
 
 
 def initialize_raw(

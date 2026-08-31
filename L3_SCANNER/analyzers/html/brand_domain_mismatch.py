@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ...models.signal import signal_result
-from ...policies.detection import DetectionPolicy
+from L3_SCANNER.models.signal import signal_result
+from L3_SCANNER.policies.detection import DetectionPolicy
 
 from ._common import brand_evidence, fatal_html_error, normalize_expected_domain
 

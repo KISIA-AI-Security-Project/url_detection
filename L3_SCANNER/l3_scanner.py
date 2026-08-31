@@ -11,15 +11,15 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Mapping
 
-from .analyzers.html import analyze_html
-from .analyzers.javascript import analyze_javascript
-from .collectors import collect_external_script, collect_page
-from .models.input import L3Input, ScriptInput
-from .parsers.html_parser import parse_html
-from .parsers.javascript_parser import parse_javascript
-from .policies.detection import DetectionPolicy
-from .policies.runtime import RuntimeConfig
-from .utils.url import etld1
+from L3_SCANNER.analyzers.html.runner import analyze_html
+from L3_SCANNER.analyzers.javascript.runner import analyze_javascript
+from L3_SCANNER.collectors import collect_external_script, collect_page
+from L3_SCANNER.models.input import L3Input, ScriptInput
+from L3_SCANNER.parsers.html_parser import parse_html
+from L3_SCANNER.parsers.javascript_parser import parse_javascript
+from L3_SCANNER.policies.detection import DetectionPolicy
+from L3_SCANNER.policies.runtime import RuntimeConfig
+from L3_SCANNER.utils.url import etld1
 
 SCHEMA_VERSION = "1.0"
 _HTML_CONTENT_TYPES = {"text/html", "application/xhtml+xml"}

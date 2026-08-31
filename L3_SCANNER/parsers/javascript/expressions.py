@@ -6,7 +6,7 @@
 
 from typing import Any
 
-from ...utils.url import resolve_http_url
+from L3_SCANNER.utils.url import resolve_http_url
 from .ast import callee_path, identifier_name, matches_api, member_path, property_name
 from .base import AnalyzerBase
 from .models import Element, Eval, Taint

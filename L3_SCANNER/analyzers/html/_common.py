@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ...policies.detection import DetectionPolicy
-from ...utils.url import etld1
+from L3_SCANNER.policies.detection import DetectionPolicy
+from L3_SCANNER.utils.url import etld1
 
 
 def fatal_html_error(raw: Mapping[str, Any]) -> dict[str, Any] | None:

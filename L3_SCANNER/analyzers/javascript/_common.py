@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ...models.signal import signal_result
+from L3_SCANNER.models.signal import signal_result
 
 
 def result(

@@ -4,7 +4,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-from ...utils.url import etld1, resolve_http_url
+from L3_SCANNER.utils.url import etld1, resolve_http_url
 from .common import stable_ids
 
 

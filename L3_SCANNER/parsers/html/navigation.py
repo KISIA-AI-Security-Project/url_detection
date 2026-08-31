@@ -6,7 +6,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-from ...utils.url import etld1, resolve_http_url
+from L3_SCANNER.utils.url import etld1, resolve_http_url
 
 _REFRESH_RE = re.compile(
     r"^\s*(?P<delay>(?:\d+(?:\.\d*)?|\.\d+))\s*"

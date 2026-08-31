@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ...utils.url import etld1, resolve_http_url
+from L3_SCANNER.utils.url import etld1, resolve_http_url
 from .ast import behavior_observations, expression_text, member_path, walk
 from .base import AnalyzerBase
 from .models import Element, Eval

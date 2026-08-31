@@ -8,15 +8,15 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from ..models.input import L3Input
-from ..models.raw import empty_javascript_raw
-from ..policies.detection import DetectionPolicy
-from ..policies.runtime import RuntimeConfig
-from ..utils.url import etld1
-from .javascript.analyzer import StaticAnalyzer
-from .javascript.ast import parse_source, parser_available, walk
-from .javascript.limits import enforce_event_limit
-from .javascript.metadata import credential_fields, script_metadata
+from L3_SCANNER.models.input import L3Input
+from L3_SCANNER.models.raw import empty_javascript_raw
+from L3_SCANNER.parsers.javascript.analyzer import StaticAnalyzer
+from L3_SCANNER.parsers.javascript.ast import parse_source, parser_available, walk
+from L3_SCANNER.parsers.javascript.limits import enforce_event_limit
+from L3_SCANNER.parsers.javascript.metadata import credential_fields, script_metadata
+from L3_SCANNER.policies.detection import DetectionPolicy
+from L3_SCANNER.policies.runtime import RuntimeConfig
+from L3_SCANNER.utils.url import etld1
 
 
 def parse_javascript(

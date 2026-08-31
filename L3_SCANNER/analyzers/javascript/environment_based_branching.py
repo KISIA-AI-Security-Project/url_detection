@@ -2,7 +2,7 @@
 
 from typing import Any, Mapping
 
-from ...policies.detection import DetectionPolicy
+from L3_SCANNER.policies.detection import DetectionPolicy
 
 from ._common import result, unique
 

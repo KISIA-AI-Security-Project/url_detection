@@ -4,8 +4,8 @@ from typing import Any
 
 from bs4 import BeautifulSoup, Tag
 
-from ...utils.hashing import sha256_text
-from ...utils.url import etld1, resolve_http_url
+from L3_SCANNER.utils.hashing import sha256_text
+from L3_SCANNER.utils.url import etld1, resolve_http_url
 from .common import stable_ids
 
 _URL_OPEN_GRAPH_PROPERTIES = {

@@ -6,10 +6,10 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
-from .html.document import initialize_raw, populate_document
-from .html.forms import build_forms
-from .html.navigation import apply_base, build_meta_refresh
-from .html.resources import build_resources
+from L3_SCANNER.parsers.html.document import initialize_raw, populate_document
+from L3_SCANNER.parsers.html.forms import build_forms
+from L3_SCANNER.parsers.html.navigation import apply_base, build_meta_refresh
+from L3_SCANNER.parsers.html.resources import build_resources
 
 
 def parse_html(
