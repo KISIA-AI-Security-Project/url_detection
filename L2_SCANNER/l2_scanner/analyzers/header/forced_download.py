@@ -22,7 +22,7 @@ RFC 5987 확장 표기(filename*=UTF-8''%..%.. - 비ASCII 파일명, filename=�
 네트워크 접속 없음 - L2-H-01의 Collector가 수집한 값을 재사용한다.
 """
 
-from utils.http_parsing import parse_content_disposition, extension_from_filename
+from l2_scanner.utils.http_parsing import parse_content_disposition, extension_from_filename
 
 SIGNAL = {"id": "L2-H-07", "scanner": "header", "name": "forced_download"}
 

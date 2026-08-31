@@ -22,3 +22,9 @@ TLS_TIMEOUT_SECONDS = 10.0   # handshake 무응답 서버 대비
 CT_LOOKUP_URL = "https://crt.sh/"   # 폴백 조회처 (외부 서비스 - 교체 가능성 있음)
 CT_TIMEOUT_SECONDS = 10.0    # crt.sh 무응답 대비 - 스캔 전체를 붙잡아 두지 않는다
 CT_MAX_ATTEMPTS = 2          # 일시 오류(502 등) 대비 재시도 횟수
+
+# ---- Analysis Record 저장 (storage.py) ----
+
+# 결과 JSON을 저장할 기본 디렉터리 (상대경로 = 실행 위치 기준).
+# Fargate 배포 시 컨테이너의 출력 마운트 경로로 교체될 값 - AWS팀 S3 연동 협의 대상.
+RECORD_OUTPUT_DIR = "records"

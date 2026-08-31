@@ -20,7 +20,7 @@ detected는 fresh와 동일 - CT에 최근 처음 등장한 인증서인가. 판
 
 from datetime import datetime, timezone
 
-from config.knowledge import FRESH_CERT_MAX_AGE_DAYS
+from l2_scanner.config.knowledge import FRESH_CERT_MAX_AGE_DAYS
 
 SIGNAL = {"id": "L2-C-06", "scanner": "certificate", "name": "ct_first_seen"}
 

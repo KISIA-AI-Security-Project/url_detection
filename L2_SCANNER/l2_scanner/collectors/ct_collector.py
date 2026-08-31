@@ -2,15 +2,12 @@
 
 [역할]
 인증서가 CT(Certificate Transparency) 로그에 최초 관측된 시각을 수집한다.
-1차: 인증서에 내장된 SCT(Signed Certificate Timestamp - CA가 발급 과정에서 CT 로그에
-     제출하고 받은 영수증)의 시각을 사용. 2018년 이후 공인 인증서는 사실상 전부 보유하며,
-     Certificate Collector가 이미 파싱해 둔 값이라 외부 접속이 필요 없다.
+1차: 인증서에 내장된 SCT의 시각을 사용. 2018년 이후 공인 인증서는 사실상 전부 보유하며, Certificate Collector가 이미 파싱해 둔 값이라 외부 접속이 필요 없다.
 2차: SCT가 없는 인증서(자체 서명,사설,구식)만 crt.sh 색인 조회로 폴백.
 
-[전체 그림에서의 위치]
+[전체 overview]
 leaf(fingerprint, sct_timestamps) -> [이 Collector] -> CT Raw Data -> [L2-C-06 Analyzer: 계산만] -> Signal
-Certificate Collector와 파일을 분리한 이유 - TLS handshake는 대상 서버 접속이고
-CT 폴백 조회는 제3자 서비스 접속이라, 실패 양상과 정책(타임아웃, 재시도)이 서로 다르다.
+Certificate Collector와 파일을 분리한 이유 - TLS handshake는 대상 서버 접속이고 CT 폴백 조회는 제3자 서비스 접속이라, 실패 양상과 정책(타임아웃, 재시도)이 서로 다르다.
 Analyzer는 네트워크 없음 원칙은 그대로 유지된다.
 
 [왜 SCT를 1차로 쓰는가]
@@ -21,12 +18,11 @@ Analyzer는 네트워크 없음 원칙은 그대로 유지된다.
 
 [crt.sh 폴백 조회 방식]
 GET https://crt.sh/?q=<sha256 fingerprint>&output=json
--> 이 인증서의 CT 로그 진입 항목 배열. 각 항목의 entry_timestamp(UTC, 오프셋 없는 ISO)가
-로그 관측 시각이며, 그 최솟값이 최초 관측(first_seen)이다.
+-> 이 인증서의 CT 로그 진입 항목 배열. 각 항목의 entry_timestamp(UTC, 오프셋 없는 ISO)가 로그 관측 시각이며, 그 최솟값이 최초 관측(first_seen)이다.
 
-[오류 처리 철학 - 다른 Collector와 동일]
+[오류 처리 - 다른 Collector와 동일]
 조회 실패는 예외가 아니라 관측 결과(확인 못 함 = null)로 기록하고 스캔은 계속된다.
-조회했는데 CT에 없음(log_entries=0)과 조회 못 함(log_entries=null)은 구분해 남긴다
+조회했는데 CT에 없음(log_entries=0)과 조회 못 함(log_entries=null)은 구분해 남긴다.
 공인 CA 인증서는 사실상 전부 CT에 기록되므로 없음 자체가 의미 있는 관측이다.
 """
 import json
@@ -34,11 +30,11 @@ from datetime import datetime, timezone
 
 import httpx
 
-from config.tuning import CT_LOOKUP_URL, CT_TIMEOUT_SECONDS, CT_MAX_ATTEMPTS
+from l2_scanner.config.tuning import CT_LOOKUP_URL, CT_TIMEOUT_SECONDS, CT_MAX_ATTEMPTS
 
 
 def _to_utc(timestamp: str) -> datetime:
-    """오프셋 없는 ISO 시각(= UTC)을 tz 붙은 datetime으로 파싱한다."""
+    # 오프셋 없는 ISO 시각(= UTC)을 tz 붙은 datetime으로 파싱한다.
     dt = datetime.fromisoformat(timestamp)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

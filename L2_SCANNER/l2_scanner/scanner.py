@@ -8,17 +8,14 @@
       4. Header Analyzer 8종 + Certificate Analyzer 6종이 Raw Data를 공유해 Signal 생성 (Analyzer는 네트워크 재접속 없음. C-06만 CT Raw Data를 읽는다)
       5. JSON(dict)으로 조립해 반환
 
-[아직 비어 있는 자리 — 의도된 placeholder]
-- job_id·attempt_id 등 시스템 공통 식별자: Evidence 스키마 팀 확정 후 덧붙인다.
-- scan.status의 세분화(PARTIAL/BLOCKED 등): 상태 Enum 팀 확정 대기.
 """
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from collectors.http_collector import collect
-from collectors.certificate_collector import collect as collect_certificate, TLS_DEFAULT_PORT
-from collectors.ct_collector import collect as collect_ct
-from analyzers.header import (
+from l2_scanner.collectors.http_collector import collect
+from l2_scanner.collectors.certificate_collector import collect as collect_certificate, TLS_DEFAULT_PORT
+from l2_scanner.collectors.ct_collector import collect as collect_ct
+from l2_scanner.analyzers.header import (
     redirect_chain,
     redirect_domain_change,
     redirect_to_ip,
@@ -28,7 +25,7 @@ from analyzers.header import (
     content_type_mismatch,
     dangerous_file_download,
 )
-from analyzers.certificate import (
+from l2_scanner.analyzers.certificate import (
     certificate_age,
     certificate_validity,
     hostname_match,
@@ -36,7 +33,7 @@ from analyzers.certificate import (
     certificate_chain,
     ct_first_seen,
 )
-from utils.http_parsing import etld1
+from l2_scanner.utils.http_parsing import etld1
 
 SCHEMA_VERSION = "1.0"
 
@@ -63,16 +60,15 @@ CERTIFICATE_ANALYZERS = [
 
 
 def _now_iso() -> str:
-    """로컬 타임존이 붙은 ISO 8601 시각 (예시: 2026-08-24T09:20:10+09:00)"""
+    # 로컬 타임존이 붙은 ISO 8601 시각 (예시: 2026-08-24T09:20:10+09:00)
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
 
 def _run_analyzer(analyzer, raw: dict, errors: list) -> dict:
     """Analyzer 1개를 격리 실행한다 - 하나가 죽어도 전체 스캔은 계속된다. 
 
-    Analyzer가 예상 못 한 Raw Data로 예외를 내면, 이미 수집한 관측과 나머지 Signal까지
-    전부 잃는 것이 기존 동작이었다. 검증 실패해도 관측은 보존에 따라
-    실패한 기능만 detected null(검사 불가) Signal로 대체하고 사유를 errors[]에 남긴다.
+    Analyzer가 예상 못 한 Raw Data로 예외를 내면, 이미 수집한 관측과 나머지 Signal까지 전부 잃는 것이 기존 동작이었다. 
+    검증 실패해도 관측은 보존에 따라 실패한 기능만 detected null(검사 불가) Signal로 대체하고 사유를 errors[]에 남긴다.
     각 Analyzer 모듈의 SIGNAL 상수(id/scanner/name)가 대체 Signal의 뼈대가 된다.
     """
     try:

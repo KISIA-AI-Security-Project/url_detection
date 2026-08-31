@@ -1,7 +1,7 @@
 """Certificate Analyzer 6종 단위 테스트 — 가짜 TLS, CT Raw Data 주입, 네트워크 없음."""
 from datetime import datetime, timedelta, timezone
 
-from analyzers.certificate import (
+from l2_scanner.analyzers.certificate import (
     certificate_age,
     certificate_validity,
     hostname_match,
