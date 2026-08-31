@@ -13,7 +13,7 @@ from typing import Any, Mapping
 
 from .analyzers.html import analyze_html
 from .analyzers.javascript import analyze_javascript
-from .collectors.page_collector import collect_external_script, collect_page
+from .collectors import collect_external_script, collect_page
 from .models.input import L3Input, ScriptInput
 from .parsers.html_parser import parse_html
 from .parsers.javascript_parser import parse_javascript
@@ -69,16 +69,30 @@ def _scripts_from_html(html_raw: Mapping[str, Any]) -> list[ScriptInput]:
     return [ScriptInput.from_mapping(item) for item in html_raw.get("scripts", [])]
 
 
+def _mark_external_script_limit(script: ScriptInput, limit: int) -> None:
+    """수집 개수 제한을 넘은 외부 스크립트에 구조화 오류를 기록한다."""
+    script.collection_errors.append(
+        {
+            "stage": "script_collection",
+            "code": "external_script_limit_exceeded",
+            "message": "External script was not fetched because the resource limit was reached.",
+            "details": {"limit": limit},
+        }
+    )
+
+
 def _prepare_scripts(
     scan_input: L3Input,
     html_raw: Mapping[str, Any],
     runtime: RuntimeConfig,
+    *,
+    fetch_external_sources: bool,
 ) -> list[ScriptInput]:
-    """제공된 스크립트를 우선하고 필요할 때만 외부 Source를 제한 수집한다.
+    """제공된 스크립트를 우선하고 URL 스캔에서만 외부 Source를 제한 수집한다.
 
     Upstream이 제공한 ``scripts``는 이미 확보된 공통 계약이므로 HTML에서 다시
-    추출한 목록보다 우선한다. 외부 Source 수집은 런타임 정책이 켜져 있어야 하며
-    개수 제한을 넘은 항목은 URL과 오류만 보존한다.
+    추출한 목록보다 우선한다. 외부 Source 수집은 ``scan_url`` 진입점이면서 런타임
+    정책이 켜진 경우에만 수행하며 개수 제한을 넘은 항목은 URL과 오류만 보존한다.
     """
     # Upstream 스크립트가 있으면 그것을 신뢰한다. HTML-only 입력에서만 공통 HTML
     # 파서가 한 번 추출한 항목을 사용하여 중복 파싱을 피한다.
@@ -87,25 +101,48 @@ def _prepare_scripts(
         if scan_input.scripts
         else _scripts_from_html(html_raw)
     )
-    external_seen = 0
-    for script in scripts:
-        if script.type != "external" or script.source is not None:
-            continue
-        external_seen += 1
-        if not runtime.fetch_external_scripts:
-            continue
-        if external_seen > runtime.max_external_scripts:
-            script.collection_errors.append(
-                {
-                    "stage": "script_collection",
-                    "code": "external_script_limit_exceeded",
-                    "message": "External script was not fetched because the resource limit was reached.",
-                    "details": {"limit": runtime.max_external_scripts},
-                }
-            )
-            continue
+    if not fetch_external_sources or not runtime.fetch_external_scripts:
+        return scripts
+
+    candidates = [
+        script
+        for script in scripts
+        if script.type == "external" and script.source is None
+    ]
+    fetch_limit = max(runtime.max_external_scripts, 0)
+    for script in candidates[:fetch_limit]:
         collect_external_script(script, runtime)
+    for script in candidates[fetch_limit:]:
+        _mark_external_script_limit(script, runtime.max_external_scripts)
     return scripts
+
+
+def _html_content_for_analysis(scan_input: L3Input) -> str | None:
+    """Content-Type 검증 결과에 따라 Parser에 전달할 HTML을 결정한다."""
+    content_type = (scan_input.html.content_type or "").split(";", 1)[0].strip().lower()
+    has_content_type_error = any(
+        error.get("code") == "unsupported_content_type"
+        for error in scan_input.collection_errors
+    )
+    unsupported = (
+        content_type not in _HTML_CONTENT_TYPES
+        if content_type
+        else has_content_type_error
+    )
+    if not unsupported:
+        return scan_input.html.content
+    if has_content_type_error:
+        return None
+
+    scan_input.collection_errors.append(
+        {
+            "stage": "input_validation",
+            "code": "unsupported_content_type",
+            "message": "Input is not an HTML content type.",
+            "details": {"content_type": content_type},
+        }
+    )
+    return None
 
 
 def _collect_errors(
@@ -144,34 +181,30 @@ class L3Scanner:
         HTML을 한 번 파싱해 공유 Raw를 만든 뒤 JavaScript 정적 분석과 각 Signal
         Analyzer를 실행한다. 개별 Signal의 오류는 전체 결과 조립을 중단하지 않는다.
         """
+        return self._scan_content(value, fetch_external_sources=False)
+
+    def _scan_content(
+        self,
+        value: L3Input | Mapping[str, Any],
+        *,
+        fetch_external_sources: bool,
+    ) -> dict[str, Any]:
+        """두 진입점의 공통 파싱·분석 경로를 실행한다."""
         started_at = _now_iso()
         scan_input = _copy_input(value)
         _bounded_html(scan_input, self.runtime)
 
-        content_type = (
-            (scan_input.html.content_type or "").split(";", 1)[0].strip().lower()
-        )
-        analyzable_html = scan_input.html.content
-        if content_type and content_type not in _HTML_CONTENT_TYPES:
-            analyzable_html = None
-            if not any(
-                error.get("code") == "unsupported_content_type"
-                for error in scan_input.collection_errors
-            ):
-                scan_input.collection_errors.append(
-                    {
-                        "stage": "input_validation",
-                        "code": "unsupported_content_type",
-                        "message": "Input is not an HTML content type.",
-                        "details": {"content_type": content_type},
-                    }
-                )
         html_raw = parse_html(
-            analyzable_html,
+            _html_content_for_analysis(scan_input),
             scan_input.document_url,
             truncated=scan_input.html.truncated,
         )
-        scan_input.scripts = _prepare_scripts(scan_input, html_raw, self.runtime)
+        scan_input.scripts = _prepare_scripts(
+            scan_input,
+            html_raw,
+            self.runtime,
+            fetch_external_sources=fetch_external_sources,
+        )
         javascript_raw = parse_javascript(
             scan_input,
             html_raw,
@@ -212,7 +245,9 @@ class L3Scanner:
 
     def scan_url(self, url: str) -> dict[str, Any]:
         """URL을 안전 제한 아래 수집한 뒤 ``scan_content``의 동일 경로로 분석한다."""
-        return self.scan_content(collect_page(url, self.runtime))
+        return self._scan_content(
+            collect_page(url, self.runtime), fetch_external_sources=True
+        )
 
 
 def scan_content(

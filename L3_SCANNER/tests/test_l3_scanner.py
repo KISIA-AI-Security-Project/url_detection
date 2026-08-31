@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from L3_SCANNER.models.input import HTMLInput, L3Input
+from typing import Any
+
+import L3_SCANNER.l3_scanner as scanner_module
 from L3_SCANNER.l3_scanner import L3Scanner, scan_content
+from L3_SCANNER.models.input import HTMLInput, L3Input, ScriptInput
 from L3_SCANNER.policies.detection import DetectionPolicy
 from L3_SCANNER.policies.runtime import RuntimeConfig
 
@@ -101,6 +104,74 @@ def test_provided_html_is_bounded_and_input_object_is_not_mutated() -> None:
     )
 
 
+def test_scan_content_never_fetches_external_scripts(monkeypatch: Any) -> None:
+    calls: list[str | None] = []
+
+    def fake_collect(script: ScriptInput, runtime: RuntimeConfig) -> ScriptInput:
+        del runtime
+        calls.append(script.source_url)
+        return script
+
+    monkeypatch.setattr(scanner_module, "collect_external_script", fake_collect)
+    result = L3Scanner(runtime=RuntimeConfig(fetch_external_scripts=True)).scan_content(
+        L3Input(
+            "https://example.com",
+            "https://example.com",
+            HTMLInput("<html></html>", content_type="text/html"),
+            scripts=[
+                ScriptInput(
+                    "script-1",
+                    "external",
+                    source_url="https://cdn.example/app.js",
+                )
+            ],
+        )
+    )
+
+    assert calls == []
+    assert result["raw"]["javascript"]["scripts"][0]["analysis_status"] == (
+        "missing_source"
+    )
+
+
+def test_scan_url_may_fetch_external_scripts_when_policy_is_enabled(
+    monkeypatch: Any,
+) -> None:
+    calls: list[str | None] = []
+    collected = L3Input(
+        "https://example.com",
+        "https://example.com",
+        HTMLInput("<html></html>", content_type="text/html"),
+        scripts=[
+            ScriptInput(
+                "script-1",
+                "external",
+                source_url="https://cdn.example/app.js",
+            )
+        ],
+    )
+
+    def fake_collect_page(url: str, runtime: RuntimeConfig) -> L3Input:
+        del url, runtime
+        return collected
+
+    def fake_collect_script(script: ScriptInput, runtime: RuntimeConfig) -> ScriptInput:
+        del runtime
+        calls.append(script.source_url)
+        script.source = "const value = 1;"
+        return script
+
+    monkeypatch.setattr(scanner_module, "collect_page", fake_collect_page)
+    monkeypatch.setattr(scanner_module, "collect_external_script", fake_collect_script)
+
+    result = L3Scanner(runtime=RuntimeConfig(fetch_external_scripts=True)).scan_url(
+        "https://example.com"
+    )
+
+    assert calls == ["https://cdn.example/app.js"]
+    assert result["raw"]["javascript"]["scripts"][0]["analysis_status"] == "parsed"
+
+
 def test_missing_html_fails_without_turning_signals_negative() -> None:
     result = scan_content(
         L3Input("https://example.com", "https://example.com", HTMLInput(None))
@@ -127,4 +198,30 @@ def test_non_html_content_type_is_not_analyzed_as_a_negative_page() -> None:
     )
     assert any(
         error["code"] == "unsupported_content_type" for error in result["errors"]
+    )
+
+
+def test_missing_collected_content_type_is_not_analyzed() -> None:
+    result = scan_content(
+        L3Input(
+            "https://example.com/data",
+            "https://example.com/data",
+            HTMLInput("not necessarily html", content_type=None),
+            collection_errors=[
+                {
+                    "stage": "collection",
+                    "code": "unsupported_content_type",
+                    "message": "response is not an HTML content type",
+                    "details": {"content_type": None},
+                }
+            ],
+        )
+    )
+
+    assert result["scan"]["status"] == "failed"
+    assert result["raw"]["html"]["document"]["parse_succeeded"] is False
+    assert all(
+        signal["detected"] is None
+        for signal in result["signals"]
+        if signal["scanner"] == "html"
     )
