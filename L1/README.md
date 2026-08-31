@@ -34,6 +34,24 @@ cd L1 && python3 -m tests.verify_all   # 검증 전부 실행 (약 2분, 실제 
 - 하나만 돌리려면: `python3 -m tests.verify_<entry|domain_units|infra|failure|records>`
 - 검증셋: 리포 루트 `data/verify_v1/dataset.csv`(600건). `verify_infra`는 600건 전수(약 1분)
 
+## 사용법 (다른 계층 연동 인터페이스)
+
+배포에서는 Step Functions가 Lambda를 부른다:
+
+```
+event = { "url_raw": "...", "job_id": "...", "attempt_id": "..." }  →  출구 JSON 반환 + S3 저장
+```
+
+코드에서 직접 쓸 때 (`L1/`에서, `pip install -r requirements.txt` 후):
+
+```python
+from src.handler import run
+output, raws = run(url_raw, job_id, attempt_id)   # 출구 dict + 관측 이름별 원본. 저장은 안 함
+
+from src.records import save
+save(output, raws, job_id, attempt_id, root)      # 로컬 저장 (S3판은 records_s3.save)
+```
+
 ## Lambda 배포 안내
 
 | 항목 | 값 |
