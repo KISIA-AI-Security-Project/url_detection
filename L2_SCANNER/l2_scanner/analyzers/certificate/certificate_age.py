@@ -17,7 +17,7 @@ detected는 fresh와 동일 — "최근 발급 패턴이 관측되었는가". �
 from datetime import datetime, timezone
 
 # 최근 발급 기준일 - 지식 데이터는 config에서 관리 (C-06과 같은 값 공유)
-from config.knowledge import FRESH_CERT_MAX_AGE_DAYS
+from l2_scanner.config.knowledge import FRESH_CERT_MAX_AGE_DAYS
 
 SIGNAL = {"id": "L2-C-01", "scanner": "certificate", "name": "certificate_age"}
 

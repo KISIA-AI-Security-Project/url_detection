@@ -11,8 +11,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509.oid import NameOID
 
-from collectors.certificate_collector import _parse_certificate
-from analyzers.certificate import self_signed, hostname_match
+from l2_scanner.collectors.certificate_collector import _parse_certificate
+from l2_scanner.analyzers.certificate import self_signed, hostname_match
 
 
 def build_self_signed_der(common_name: str, san: list[str],

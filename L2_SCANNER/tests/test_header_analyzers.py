@@ -1,5 +1,5 @@
 """Header Analyzer 8종 단위 테스트 — 가짜 Raw Data 주입, 네트워크 없음."""
-from analyzers.header import (
+from l2_scanner.analyzers.header import (
     redirect_chain,
     redirect_domain_change,
     redirect_to_ip,

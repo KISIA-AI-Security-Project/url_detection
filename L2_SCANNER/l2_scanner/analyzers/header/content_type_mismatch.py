@@ -8,9 +8,8 @@
 [출력]  Signal evidence{declared_type, detected_type}
 
 [탐지 원리]
-모든 파일 형식은 첫 바이트에 고유 서명(magic bytes)을 갖는다
-(PNG=‰PNG, PDF=%PDF, exe=MZ...). 헤더는 서버가 마음대로 쓸 수 있지만
-바이트 서명은 위조하면 파일이 동작하지 않으므로, 둘을 비교하면 거짓말이 드러난다.
+모든 파일 형식은 첫 바이트에 고유 서명(magic bytes)을 갖는다.
+헤더는 서버가 마음대로 쓸 수 있지만, 바이트 서명은 위조하면 파일이 동작하지 않으므로, 둘을 비교하면 거짓말이 드러난다.
 판독은 Collector가 이미 해뒀고(바디가 잘려도 앞부분 서명은 유효), 여기서는 비교만 한다.
 
 [비교 전 두 가지 보정]
@@ -23,8 +22,8 @@
 네트워크 접속 없음 - L2-H-01의 Collector가 수집한 값을 재사용한다.
 """
 
-from config.knowledge import EQUIVALENT_PAIRS   # 동의어 쌍 - 지식 데이터는 config에서 관리
-from utils.http_parsing import split_mime
+from l2_scanner.config.knowledge import EQUIVALENT_PAIRS   # 동의어 쌍 - 지식 데이터는 config에서 관리
+from l2_scanner.utils.http_parsing import split_mime
 
 SIGNAL = {"id": "L2-H-05", "scanner": "header", "name": "content_type_mismatch"}
 

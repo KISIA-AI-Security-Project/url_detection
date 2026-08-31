@@ -8,8 +8,8 @@ import json
 
 import httpx
 
-from collectors import ct_collector
-from collectors.ct_collector import collect, CT_MAX_ATTEMPTS
+from l2_scanner.collectors import ct_collector
+from l2_scanner.collectors.ct_collector import collect, CT_MAX_ATTEMPTS
 
 FINGERPRINT = "ab" * 32
 

@@ -1,5 +1,5 @@
 """utils/http_parsing 공용 유틸 단위 테스트 — 네트워크 없음."""
-from utils.http_parsing import (
+from l2_scanner.utils.http_parsing import (
     parse_content_disposition,
     extension_from_filename,
     filename_from_url,

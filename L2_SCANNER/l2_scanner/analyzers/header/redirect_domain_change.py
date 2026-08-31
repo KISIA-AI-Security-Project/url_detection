@@ -16,7 +16,7 @@ detected: true(변경 관측) / false(응답은 받았고 변경 없음) / null(
 네트워크 접속 없음 - L2-H-01의 Collector가 수집한 redirect_chain[]을 재사용한다.
 """
 
-from utils.http_parsing import etld1
+from l2_scanner.utils.http_parsing import etld1
 
 SIGNAL = {"id": "L2-H-02", "scanner": "header", "name": "redirect_domain_change"}
 

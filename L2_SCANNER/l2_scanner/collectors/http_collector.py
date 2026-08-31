@@ -1,18 +1,12 @@
-"""L2 HTTP Collector (L2-H-01의 수집 담당)
+"""L2 HTTP Collector 
 
 [역할]
-대상 URL에 접속해 리다이렉트 여정을 한 hop씩 직접 따라가며 기록하고,
-최종 응답의 헤더, 바디 정보를 수집해 Raw Data 딕셔너리로 반환한다.
+대상 URL에 접속해 리다이렉트 여정을 한 hop씩 직접 따라가며 기록하고, 최종 응답의 헤더, 바디 정보를 수집해 Raw Data 딕셔너리로 반환한다.
 
-[전체 그림에서의 위치]
+[전체 overview]
 Target URL -> [이 Collector: 접속 1회] -> Raw Data -> [Analyzer 8종: 계산만] -> Signals
 네트워크 접속은 여기서 딱 한 번 일어난다. Analyzer들은 이 결과를 재사용만 한다.
 (접속은 1회, 분석은 공유. 같은 URL에 기능마다 다시 접속하지 않는다)
-
-[왜 리다이렉트를 자동으로 따라가지 않는가]
-httpx의 follow_redirects=True를 쓰면 최종 응답만 남고 중간 여정이 사라진다.
-L2-H-01~04는 어디를 거쳐 어디로 갔는가 자체가 분석 대상이므로,
-자동 추적을 끄고 3xx 응답을 한 단계(hop)씩 수동으로 따라가며 기록한다.
 
 [안전장치 4종] - 악성 서버는 스캐너를 공격 대상으로 삼을 수 있다는 전제
 1. MAX_REDIRECT_HOPS : 무한 리다이렉트 루프(A->B->A->...)로 스캐너를 묶어두는 공격 방지
@@ -28,7 +22,7 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 import magic
 
-from config.tuning import (
+from l2_scanner.config.tuning import (
     MAX_REDIRECT_HOPS,
     HTTP_TIMEOUT_SECONDS,
     MAX_BODY_BYTES,
@@ -36,7 +30,7 @@ from config.tuning import (
     MAGIC_SIGNATURE_BYTES,
     USER_AGENT,
 )
-from utils.http_parsing import (
+from l2_scanner.utils.http_parsing import (
     parse_content_disposition,
     extension_from_filename,
     filename_from_url,
@@ -63,10 +57,8 @@ def _blocked_destination(url: str) -> str | None:
     전부 is_global=False라서 개별 대역을 나열할 필요가 없다.
 
     [설계 결정 2가지]
-    - 차단은 악성 판정이 아니라 정책 차단이다. 차단 사실과 사유를 errors[]에
-      기록할 뿐, detected 판단은 Analyzer(L2-H-03 등)의 몫이다.
-    - 원본 URL 자체가 IP, 내부망인 경우는 여기서 다루지 않는다. 그것은 접속 전
-      문자열로 알 수 있는 정보라 L0/Reachability 게이트의 담당이다.
+    - 차단은 악성 판정이 아니라 정책 차단이다. 차단 사실과 사유를 errors[]에 기록할 뿐, detected 판단은 Analyzer(L2-H-03 등)의 몫이다.
+    - 원본 URL 자체가 IP, 내부망인 경우는 여기서 다루지 않는다. 그것은 접속 전 문자열로 알 수 있는 정보라 L0/Reachability 게이트의 담당이다.
     """
     host = urlsplit(url).hostname
     if host is None:
@@ -79,11 +71,10 @@ def _blocked_destination(url: str) -> str | None:
     except ValueError:
         pass   # ValueError = IP가 아니라 도메인이라는 뜻 -> 아래에서 DNS로 판정
 
-    # 2) 도메인이면 해석된 모든 IP를 확인한다 (A 레코드가 여러 개일 수 있고,
-    # 그중 하나라도 내부망이면 차단). 해석 실패는 차단하지 않는다
-    # 어차피 접속 단계에서 실패하고 그 오류가 기록된다.
-    # 한계: 해석 시점과 실제 연결 시점 사이에 IP를 바꾸는 DNS Rebinding까지는
-    # 여기서 못 막는다 - 격리 실행 환경(컨테이너)이 마지막 방어선이라는 전제.
+    # 2) 도메인이면 해석된 모든 IP를 확인한다 (A 레코드가 여러 개일 수 있고,그 중 하나라도 내부망이면 차단). 
+    # 해석 실패는 차단하지 않는다. 어차피 접속 단계에서 실패하고 그 오류가 기록된다.
+    # 한계: 해석 시점과 실제 연결 시점 사이에 IP를 바꾸는 DNS Rebinding까지는 여기서 못 막는다.
+    # 격리 실행 환경(컨테이너)이 마지막 방어선이라는 전제.
     try:
         infos = socket.getaddrinfo(host, None)
     except OSError:
@@ -99,15 +90,12 @@ def _collect_body(resp, result: dict) -> None:
     """최종 응답 바디를 상한(MAX_BODY_BYTES)까지 스트리밍으로 읽어 result에 기록한다.
 
     [왜 스트리밍인가]
-    resp.content는 바디 전체를 한 번에 메모리에 올린다. 악성 서버가 수 GB를
-    흘려보내면 스캐너가 죽는다. 그래서 조각(chunk) 단위로 받다가 상한을 넘으면
-    그 시점에 읽기를 중단한다.
+    resp.content는 바디 전체를 한 번에 메모리에 올린다. 악성 서버가 수 GB를 흘려보내면 스캐너가 죽는다. 
+    그래서 조각(chunk) 단위로 받다가 상한을 넘으면 그 시점에 읽기를 중단한다.
 
     [잘렸을 때의 기록 원칙 - 확인 안 됨과 없음의 구분]
-    - sha256: 부분 바디의 해시는 그 파일의 해시가 아니다. VirusTotal 조회 등에
-      쓰면 거짓 정보가 되므로 null(확인 못 함)로 남긴다.
-    - size: 실제 크기를 끝까지 안 읽었으므로 모른다. 서버가 선언한 Content-Length가
-      있을 때만 그 값을 기록하고, 없으면 null.
+    - sha256: 부분 바디의 해시는 그 파일의 해시가 아니다. VirusTotal 조회 등에 쓰면 거짓 정보가 되므로 null(확인 못 함)로 남긴다.
+    - size: 실제 크기를 끝까지 안 읽었으므로 모른다. 서버가 선언한 Content-Length가 있을 때만 그 값을 기록하고, 없으면 null.
     - detected_type / magic_bytes: 파일 서명은 첫 바이트들에 있으므로 잘려도 유효하다.
     - truncated=True 표시로 이 기록은 부분 관측임을 후속 단계에 알린다.
     """
@@ -145,7 +133,7 @@ def collect(url: str) -> dict:
     입력: 대상 URL 문자열
     출력: dict — original_url / current_url / final_url / status_code / redirect_chain[] / headers / response_body / download / errors[]
 
-    [오류 처리 철학]
+    [오류 처리]
     접속 실패, 차단, 비정상 응답도 예외를 던지지 않고 errors[]에 관측 결과로 남긴다.
     접속해봤는데 실패했다는 것 자체가 분석에 쓰이는 정보이기 때문이다.
     (예: 악성 IP는 봇 접속을 차단하는 경우가 많다 - 실패했어도 리다이렉트 관측은 유효)
@@ -257,8 +245,7 @@ def collect(url: str) -> dict:
 
                     # 파일 메타 2: 파일명 후보 - 두 단계로 찾는다
                     # 1순위: Content-Disposition의 filename / filename*= (RFC 5987 포함)
-                    # 2순위: URL 경로의 마지막 조각 (직링크 다운로드 대비 fallback 헤더 없이 http://x/payload.ps1 로 배포하는 경우,
-                    #       브라우저도 URL 경로명을 저장 파일명으로 쓴다)
+                    # 2순위: URL 경로의 마지막 조각 (직링크 다운로드 대비 fallback 헤더 없이 http://x/payload.ps1 로 배포하는 경우, 브라우저도 URL 경로명을 저장 파일명으로 쓴다)
                     cd = resp.headers.get("content-disposition")
                     filename = parse_content_disposition(cd)["filename"] if cd else None
                     if filename is None:

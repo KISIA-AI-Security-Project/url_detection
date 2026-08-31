@@ -1,23 +1,21 @@
-"""L2 Certificate Collector (L2-C 계열의 수집 담당)
+"""L2 Certificate Collector 
 
 [역할]
 대상 호스트와 TLS handshake를 1회 수행해 인증서(leaf)와 인증서 체인을 수집, 파싱하고,
 Certificate Analyzer들(L2-C-01 ~ 06)이 공유할 Raw Data 딕셔너리로 반환한다.
 
-[전체 그림에서의 위치]
+[전체 overview]
 hostname -> [이 Collector: TLS 접속 1회] -> TLS Raw Data -> [Cert Analyzer: 계산만] -> Signals
 HTTP Collector와 같은 원칙 - 접속(handshake)은 한 번, 분석은 여러 기능이 공유한다.
-X.509 인증서를 한 번 수집한 뒤 notBefore/notAfter/SAN/Subject/Issuer 등을 파싱해 두면
-Analyzer들은 파싱된 값만 읽는다.
+X.509 인증서를 한 번 수집한 뒤 notBefore/notAfter/SAN/Subject/Issuer 등을 파싱해 두면 Analyzer들은 파싱된 값만 읽는다.
 
 [2단계 handshake 전략 - 검증 실패해도 관측은 보존]
 1차: 체인 검증 ON  (verify_mode=CERT_REQUIRED) -> 성공하면 chain_valid=true + 검증된 체인
 2차: 1차가 검증 실패로 끊기면, 검증 OFF(CERT_NONE)로 재접속해 인증서 자체는 수집
--> 자체 서명, 만료 인증서야말로 분석 대상인데, 검증 실패로 인증서를 못 보면 안 됨.
-실패 사유는 chain_error에 관측 결과로 남긴다.
+-> 자체 서명, 만료 인증서야말로 분석 대상인데, 검증 실패로 인증서를 못 보면 안 됨. 실패 사유는 chain_error에 관측 결과로 남긴다.
 
-호스트명 검사(check_hostname)는 두 번 모두 끈다 - 호스트명 일치는 L2-C-03 Analyzer가
-SAN을 직접 대조해 판정한다. 체인 신뢰성(C-05)과 호스트명 일치(C-03)를 분리 관측하기 위함.
+호스트명 검사(check_hostname)는 두 번 모두 끈다 - 호스트명 일치는 L2-C-03 Analyzer가SAN을 직접 대조해 판정한다. 
+체인 신뢰성(C-05)과 호스트명 일치(C-03)를 분리 관측하기 위함.
 """
 import socket
 import ssl
@@ -27,7 +25,7 @@ from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 
-from config.tuning import TLS_TIMEOUT_SECONDS
+from l2_scanner.config.tuning import TLS_TIMEOUT_SECONDS
 
 TLS_DEFAULT_PORT = 443   # 표준 포트 (조정값이 아니라 여기 둔다)
 
@@ -56,8 +54,7 @@ def _parse_certificate(der_bytes: bytes) -> dict:
     except x509.ExtensionNotFound:
         pass
 
-    # 내장 SCT(Signed Certificate Timestamp) - CA가 발급 과정에서 CT 로그에 제출하고 받은
-    # 영수증(제출 시각 포함)을 인증서에 내장한 것. 2018년 이후 공인 인증서는 사실상 전부 보유.
+    # 내장 SCT(Signed Certificate Timestamp) 
     # SCT의 timestamp가 CT 로그가 이 인증서를 처음 관측한 시각 - L2-C-06의 1차 재료.
     # (자체 서명, 사설 인증서에는 없다 -> 그때는 CT Collector가 crt.sh 조회로 폴백)
     sct_timestamps = []
@@ -71,7 +68,7 @@ def _parse_certificate(der_bytes: bytes) -> dict:
         pass
 
     # 자체 서명 여부 - 이름 비교가 아니라 서명 실검증으로 판정한다:
-    # 1. subject ≠ issuer 이름이면 정의상 자체 서명이 아니다.
+    # 1. subject != issuer 이름이면 정의상 자체 서명이 아니다.
     # 2. 이름이 같으면 인증서 서명을 자기 공개키로 검증한다 - issuer 이름만 같게 꾸미고
     #    실제로는 다른 키로 서명한 인증서를 이름 비교만으로는 구분 못 하기 때문.
     # 3. 미지원 알고리즘 등으로 검증 자체가 불가하면 null - 확인 안 됨 != 아님
@@ -124,8 +121,7 @@ def collect(hostname: str, port: int = TLS_DEFAULT_PORT) -> dict:
 
     입력: hostname (SNI로도 사용), port (기본 443)
     출력: TLS 트리 -
-          hostname / tls_version / leaf_certificate / certificate_chain[]
-          / chain_valid / chain_error / errors[]
+          hostname / tls_version / leaf_certificate / certificate_chain[] / chain_valid / chain_error / errors[]
 
     [오류 처리 - HTTP Collector와 동일]
     handshake 실패, 검증 실패도 예외를 던지지 않고 관측 결과로 기록한다.

@@ -3,8 +3,8 @@
 Analyzer 하나가 예상 못 한 Raw Data로 예외를 내도 전체 스캔이 죽지 않고,
 해당 기능만 detected null Signal + errors[] 기록으로 대체되는지 확인한다. (팀 리뷰 반영)
 """
-from l2_scanner import _run_analyzer
-from analyzers.header import redirect_chain
+from l2_scanner.scanner import _run_analyzer
+from l2_scanner.analyzers.header import redirect_chain
 
 
 class BrokenAnalyzer:

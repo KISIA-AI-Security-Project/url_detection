@@ -32,7 +32,7 @@ Collector가 sha256을 null로 남긴다 - 부분 해시는 파일 식별자로 
 """
 
 # 위험 확장자, 실행파일 MIME 명단 - 지식 데이터는 config에서 관리
-from config.knowledge import DANGEROUS_EXTENSIONS, EXECUTABLE_MIMES
+from l2_scanner.config.knowledge import DANGEROUS_EXTENSIONS, EXECUTABLE_MIMES
 
 SIGNAL = {"id": "L2-H-06", "scanner": "header", "name": "dangerous_file_download"}
 

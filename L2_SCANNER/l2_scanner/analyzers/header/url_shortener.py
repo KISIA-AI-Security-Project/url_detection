@@ -20,8 +20,8 @@ L0은 접속 전에 원본 URL 문자열만 보고 판별하고, L2는 접속 �
 네트워크 접속 없음 - L2-H-01의 Collector가 수집한 Raw Data를 재사용한다.
 """
 
-from config.knowledge import SHORTENER_DOMAINS   # 단축 서비스 명단 - 지식 데이터는 config에서 관리
-from utils.http_parsing import etld1
+from l2_scanner.config.knowledge import SHORTENER_DOMAINS   # 단축 서비스 명단 - 지식 데이터는 config에서 관리
+from l2_scanner.utils.http_parsing import etld1
 
 SIGNAL = {"id": "L2-H-04", "scanner": "header", "name": "url_shortener"}
 

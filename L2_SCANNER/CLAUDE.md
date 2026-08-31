@@ -4,23 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-악성 URL 분석 파이프라인의 **L2(응답·통신 분석) 계층**. URL에 접속해 HTTP 통신·리다이렉트·TLS 인증서를 관측하고, 통합 명세서 10장 형식의 결과 JSON을 반환한다. KISIA 팀 프로젝트의 한 계층이며 **통합 명세서와 L2 기능 DB(L2-H-01~08, L2-C-01~06)가 최종 근거 문서**다 — 출력 형식·기능 범위를 바꿀 때는 명세서와 대조할 것.
+악성 URL 분석 파이프라인의 **L2(응답, 통신 분석) 계층**. URL에 접속해 HTTP 통신, 리다이렉트, TLS 인증서를 관측하고, 통합 명세서 10장 형식의 결과 JSON을 반환한다. KISIA 팀 프로젝트의 한 계층이며 통합 명세서와 L2 기능 DB(L2-H-01~08, L2-C-01~06)가 최종 근거 문서다 — 출력 형식, 기능 범위를 바꿀 때는 명세서와 대조할 것.
 
 ## 명령어
 
-Windows + venv 환경. 전역 python 대신 venv 실행 파일을 직접 호출한다:
+Windows + conda 환경(`L2_scanner`). venv가 아니라 conda env의 python을 직접 호출한다:
 
 ```powershell
-.\venv\Scripts\pip install -r requirements.txt        # 의존성 설치
-.\venv\Scripts\python -m pytest tests -q              # 전체 테스트 (네트워크 불필요)
-.\venv\Scripts\python -m pytest tests\test_header_analyzers.py -q   # 파일 하나
-.\venv\Scripts\python -m pytest tests -q -k redirect  # 이름으로 필터
-.\venv\Scripts\python main.py                         # 데모 (실제 네트워크 접속 — badssl 등 테스트 URL 스캔)
+# 사용자 터미널에서는: conda activate L2_scanner 후 python/pip 사용
+# 비대화형(스크립트, Claude Code)에서는 env의 python을 절대경로로 직접 호출:
+C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe -m pip install -r requirements.txt  # 의존성 설치
+C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe -m pip install -e .                 # 패키지 개발 설치 (최초 1회 — import l2_scanner를 어디서든 가능하게)
+C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe -m pytest tests -q                  # 전체 테스트 (네트워크 불필요)
+C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe -m pytest tests -q -k redirect      # 이름으로 필터
+C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe main.py                             # 데모 (실제 네트워크 접속)
 ```
 
 ## 아키텍처
 
-전체 흐름은 `l2_scanner.py`의 `scan(url)` 한 함수로 요약된다:
+코드 전체가 `l2_scanner/` 패키지 하나다 (`pyproject.toml`로 설치 — 2026-08-31 패키지 구조 전환, 멘토 지시). 다른 계층은 `from l2_scanner import scan, save_record`만 쓰면 된다. 전체 흐름은 `l2_scanner/scanner.py`의 `scan(url)` 한 함수로 요약된다:
 
 ```
 scan(url)
@@ -31,9 +33,11 @@ scan(url)
   → 명세서 10장 형식 JSON 조립
 ```
 
+결과 저장은 `scan()` 밖의 별도 기능이다 — `l2_scanner/storage.py`의 `save_record(result)`가 결과 dict를 JSON 파일로 저장한다(기본 `records/`, 원자적 쓰기·덮어쓰기 금지·실패 시 예외 전파). 분석과 데이터화의 분리(아키텍처 V2 4장)에 따라 scan()에 저장 로직을 넣지 않는다. S3 업로드·job_id 경로 배치는 AWS Job 래퍼 몫.
+
 **Collector와 Analyzer의 역할 분리가 핵심 설계다:**
-- **Collector**(`collectors/`)만 네트워크에 접속한다. 접속은 종류별 1회, 결과는 Raw Data dict.
-- **Analyzer**(`analyzers/header/`, `analyzers/certificate/`)는 Raw Data만 읽는 순수 로직 — 네트워크 접속 금지. 새 Analyzer가 네트워크가 필요해 보이면 먼저 Collector에 수집을 추가하는 게 맞는지 검토할 것.
+- **Collector**(`l2_scanner/collectors/`)만 네트워크에 접속한다. 접속은 종류별 1회, 결과는 Raw Data dict.
+- **Analyzer**(`l2_scanner/analyzers/header/`, `l2_scanner/analyzers/certificate/`)는 Raw Data만 읽는 순수 로직 — 네트워크 접속 금지. 새 Analyzer가 네트워크가 필요해 보이면 먼저 Collector에 수집을 추가하는 게 맞는지 검토할 것.
 - 예외: `ct_first_seen`(L2-C-06)만 CT Raw Data를 읽으므로 `CERTIFICATE_ANALYZERS` 목록에 없고 `scan()`에서 따로 호출된다.
 
 **Analyzer 계약** — 모든 Analyzer는 모듈 상단에 `SIGNAL = {"id", "scanner", "name"}` 상수를 노출하고, `analyze(raw: dict) -> dict` 하나로 다음 형식의 Signal을 반환한다:
@@ -44,16 +48,16 @@ SIGNAL = {"id": "L2-H-03", "scanner": "header", "name": "redirect_to_ip"}
 ```
 
 - `detected`는 3값: `True`(관측) / `False`(검사했고 미관측) / `None`(재료가 없어 검사 불가). 검사를 못 한 것을 `False`로 적지 않는다.
-- `SIGNAL` 상수는 Analyzer가 예외로 죽었을 때 `l2_scanner._run_analyzer`가 대체 Signal(detected null)을 만드는 뼈대이므로 생략 불가.
+- `SIGNAL` 상수는 Analyzer가 예외로 죽었을 때 `scanner._run_analyzer`가 대체 Signal(detected null)을 만드는 뼈대이므로 생략 불가.
 
-새 Analyzer 추가 시 `l2_scanner.py`의 `HEADER_ANALYZERS`/`CERTIFICATE_ANALYZERS` 목록에 **기능 번호 순서대로** 등록한다 (목록 순서 = 결과 JSON의 signals[] 순서). Analyzer는 `_run_analyzer`로 격리 실행된다 — 하나가 예외를 내도 스캔 전체가 죽지 않고 해당 기능만 null Signal + errors[] 기록으로 대체된다.
+새 Analyzer 추가 시 `l2_scanner/scanner.py`의 `HEADER_ANALYZERS`/`CERTIFICATE_ANALYZERS` 목록에 **기능 번호 순서대로** 등록한다 (목록 순서 = 결과 JSON의 signals[] 순서). Analyzer는 `_run_analyzer`로 격리 실행된다 — 하나가 예외를 내도 스캔 전체가 죽지 않고 해당 기능만 null Signal + errors[] 기록으로 대체된다.
 
 ## 프로젝트 원칙 (명세서 합의 사항)
 
 - **관측 ≠ 판정**: `detected`는 패턴 관측 여부일 뿐, 악성 판정은 상위 Rule Engine/LLM의 몫. Analyzer에 점수·판정 로직을 넣지 않는다.
 - **"확인 안 됨" ≠ "없음"**: 확인하지 못한 값은 `False`/`0`이 아니라 `null`(None)로 기록한다. `detected`도 마찬가지 — 검사 자체가 불가하면 `null` (예: HTTPS 대상이 없으면 인증서 Signal 6종은 `detected: null`).
 - **검증 실패해도 관측은 보존**: Certificate Collector는 체인 검증 실패 시 검증 OFF로 재접속해 인증서 자체는 수집한다 — 자체 서명·만료 인증서가 곧 분석 대상이기 때문.
-- 바뀔 수 있는 상수는 환경변수가 아니라 **`config/` 패키지에서 성격별로** 관리한다 — `config/tuning.py`(타임아웃·상한 등 운영 조정값), `config/knowledge.py`(위험 확장자·단축 도메인 명단 등 지식 데이터). 프로토콜 의미론(REDIRECT_CODES 등)과 Analyzer의 SIGNAL 상수는 조정 대상이 아니므로 각 모듈에 남긴다.
+- 바뀔 수 있는 상수는 환경변수가 아니라 **`l2_scanner/config/` 패키지에서 성격별로** 관리한다 — `config/tuning.py`(타임아웃·상한 등 운영 조정값), `config/knowledge.py`(위험 확장자·단축 도메인 명단 등 지식 데이터). 프로토콜 의미론(REDIRECT_CODES 등)과 Analyzer의 SIGNAL 상수는 조정 대상이 아니므로 각 모듈에 남긴다.
 - 배포 환경은 **Linux 기준** (2026-08-27 팀 협의). requirements.txt의 win32 마커 줄은 로컬 개발(Windows) 편의용일 뿐이다.
 
 ## 코드 컨벤션
