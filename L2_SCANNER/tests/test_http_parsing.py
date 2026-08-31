@@ -1,5 +1,5 @@
 """utils/http_parsing 공용 유틸 단위 테스트 — 네트워크 없음."""
-from utils.http_parsing import (
+from l2_scanner.utils.http_parsing import (
     parse_content_disposition,
     extension_from_filename,
     filename_from_url,
@@ -46,6 +46,19 @@ class TestParseContentDisposition:
     def test_unknown_charset_falls_back(self):
         parsed = parse_content_disposition("attachment; filename*=X-BAD''a%20b.exe")
         assert parsed["filename"] == "a b.exe"
+
+    def test_semicolon_inside_quoted_filename(self):
+        # 따옴표 안 세미콜론은 구분자가 아니다 — 여기서 잘리면 진짜 확장자(.exe)를
+        # 놓쳐 위험 확장자 탐지를 우회당한다 (팀 리뷰로 발견된 버그의 회귀 테스트)
+        parsed = parse_content_disposition('attachment; filename="payload;evil.exe"')
+        assert parsed == {"type": "attachment", "filename": "payload;evil.exe"}
+
+    def test_semicolon_inside_quotes_then_next_param(self):
+        # 따옴표가 닫힌 뒤의 세미콜론은 여전히 구분자로 동작해야 한다
+        parsed = parse_content_disposition(
+            'attachment; filename="decoy;a.txt"; filename*=UTF-8\'\'real.exe'
+        )
+        assert parsed["filename"] == "real.exe"   # filename* 우선 규칙도 그대로 유지
 
 
 class TestExtensionFromFilename:
