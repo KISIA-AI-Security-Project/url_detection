@@ -32,27 +32,78 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # E-1: DGA 판정 상수
 # ---------------------------------------------------------------------------
-# 이보다 짧은 도메인은 판정하지 않는다. 표본이 적어 엔트로피가 심하게 왜곡된다.
+# 이보다 짧은 도메인은 판정하지 않는다. 표본이 적어 지표가 심하게 왜곡된다.
 # 예를 들어 4자 도메인은 모든 글자가 달라도 엔트로피가 2.0에 그친다.
 _DGA_MIN_DOMAIN_LENGTH = 8
 
-# 섀넌 엔트로피 임계. 글자가 고르게 흩어져 있을수록 값이 커진다.
-# 사람이 지은 이름은 특정 글자가 반복되어 엔트로피가 낮다.
-_DGA_ENTROPY_THRESHOLD = 3.8
+# 최대 연속 비모음 임계.
+#
+# [실측 근거] 악성 도메인 라벨 194,505개(8자 이상)와 영어 단어 176,807개를
+# 대조했다. 영어 단어는 "사람이 읽을 수 있는 문자열"의 대리 모집단이다.
+#
+#   임계   악성 탐지   단어 오탐    배율
+#     4     26.42%     10.04%     2.6x
+#     5     13.00%      2.09%     6.2x   <- 초안값
+#     6      7.53%      0.34%    22.3x
+#     7      5.36%      0.08%    64.0x   <- 채택
+#     8      4.14%      0.02%   187.8x
+#
+# 배율 = 악성 탐지율 / 영어 단어 오탐율. 우도비(likelihood ratio)다. 값이
+# 클수록 정상을 덜 건드리면서 악성을 잡는다.
+#
+# 임계를 올리면 탐지율과 오탐율이 함께 떨어지지만 오탐이 훨씬 빠르게 준다.
+# 실제 유입은 정상이 압도적으로 많으므로 오탐 억제가 더 중요하다. 초안의 5는
+# 읽을 수 있는 문자열 50개 중 1개를 DGA로 부르게 된다. 8은 배율이 더 높으나
+# 탐지율이 4.14%까지 떨어져 정밀도 이득 대비 탐지 손실이 크다.
+_DGA_MAX_CONSECUTIVE_CONSONANTS = 7
 
-# 모음 비율. 사람이 읽을 수 있는 단어는 모음이 30~45% 안팎이다.
-# 양쪽 극단을 모두 본다 — 자음만 늘어놓은 것도, 모음만 늘어놓은 것도 부자연스럽다.
-_DGA_VOWEL_RATIO_LOW = 0.15
-_DGA_VOWEL_RATIO_HIGH = 0.70
-
-# 연속 자음 개수. 영어에서 자음이 5개 이상 끊기지 않고 이어지는 단어는 거의 없다.
-_DGA_MAX_CONSECUTIVE_CONSONANTS = 5
+# 섀넌 엔트로피 임계. 연속 비모음 조건과 AND로 묶는다.
+#
+# [단독으로 쓸 수 없다]
+# 분위수를 보면 악성 중앙값 3.18 / 영어 단어 2.95로 방향성은 유효하나 두 분포가
+# 넓게 겹친다. 임계를 3.0으로 두면 악성의 상당수를 잡지만 영어 단어도 25% 이상
+# 오탐된다. 길이로 정규화해도(H / log2(길이)) 배율이 0.8x로 오히려 영어 단어가
+# 더 높게 나온다. 길이 구간을 고정해 비교하면 중앙값이 8자에서 2.75 대 2.75,
+# 13자에서 3.18 대 3.18로 같다 — 원본 분포의 차이는 길이 차이였다.
+#
+# [AND로 결합하면 제 몫을 한다]
+# 연속 비모음만으로는 "글자 종류가 빈약한 문자열"을 걸러내지 못한다.
+#   adminnnnnnnnni  H=1.63  C=9    <- 같은 글자 반복
+#   sdsfdfsdf       H=1.58  C=9    <- 키보드 뭉개기
+#   jhfgjfgjgfj     H=1.87  C=11
+#   id-8789978939   H=2.57  C=10   <- 숫자 나열
+# 이들은 발음은 불가능하지만 알고리즘이 만든 무작위 문자열이 아니다.
+# 엔트로피 조건이 연속 비모음 7 이상 10,424건 중 2,446건을 이렇게 걸러낸다.
+#
+#   조건                     악성 탐지   단어 오탐    배율
+#   C>=7                      5.36%      0.08%     64.0x
+#   C>=7 AND H>=3.0           4.10%      0.05%     78.8x   <- 채택
+#   C>=7 AND H>=3.2           3.48%      0.03%    128.1x
+_DGA_ENTROPY_THRESHOLD = 3.0
 
 _VOWELS = frozenset("aeiou")
 
 # ---------------------------------------------------------------------------
 # E-2: 길이 임계
 # ---------------------------------------------------------------------------
+# [임계의 근거는 주소창 표시 한계다]
+# 이 항목이 잡으려는 것은 "사용자가 주소를 끝까지 읽지 못하는 상태"다. 공격이
+# 성립하는 조건이 바로 그것이므로, 통계 분위수가 아니라 사람이 실제로 볼 수
+# 있는 길이를 기준으로 삼는다. 데스크톱 브라우저 주소창은 100자 안팎부터 끝이
+# 잘려 보이기 시작하고 모바일은 그보다 훨씬 짧다.
+#
+# 세 축을 따로 두는 이유는 어디가 길어졌는지가 의미를 갖기 때문이다.
+# 경로가 길면 디렉터리 위장, 쿼리가 길면 페이로드 은닉인 경우가 많다.
+#
+# [코퍼스 분위수와의 대조] 악성 URL 1,007,881건 기준이다.
+#
+#            50%    75%    90%    95%    97%    99%
+#   전체      52     83    134    206    262    618
+#   경로      14     37     61     89    109    166
+#   쿼리       0      0     43    121    167    463   (82.3%가 쿼리 없음)
+#
+# 아래 임계는 각각 88 / 90 / 93 분위에 해당하며 합쳐서 16.52%가 탐지된다.
+# 탐지율이 높은 편이므로 단독 판단 근거가 아니라 조합용 약한 지표로 다룬다.
 _LONG_URL_TOTAL = 120
 _LONG_URL_PATH = 60
 _LONG_URL_QUERY = 80
@@ -79,13 +130,17 @@ _BASE64_PAYLOAD_MARKERS = re.compile(
 # ---------------------------------------------------------------------------
 # E-5: 서브도메인 구조 상수
 # ---------------------------------------------------------------------------
-# 깊이 임계를 4로 둔다. 3이 아니다.
+# 깊이는 탐지 트리거가 아니다. 관찰 사실로만 기록한다.
 #
 # s3.dualstack.us-east-1.amazonaws.com 처럼 정상 인프라가 깊이 3을 쓰는 경우가
-# 흔해, 3을 기준으로 삼으면 AWS·CDN 계열이 대량 오탐된다. 깊이만으로는 판별력이
-# 약하므로 임계를 한 단계 올리고, 깊이 자체는 탐지 여부와 무관하게 value에
-# 관찰 사실로 남겨 종합 단계가 참고할 수 있게 한다.
-_SUBDOMAIN_DEPTH_THRESHOLD = 4
+# 흔하다. 임계를 3으로 두면 AWS·CDN 계열이 대량 오탐되고, 4로 올려도 판별력이
+# 약해 "깊으면 수상하다"는 주장을 뒷받침하지 못한다.
+#
+# 반면 서브도메인에 TLD가 끼어 있는 것은 구조적으로 설명할 이유가 없다.
+# naver.com.evil-host.com 에서 왼쪽 naver.com은 브랜드를 읽히게 하려는 목적
+# 외에는 존재 이유가 없다. 이것만 탐지 트리거로 쓴다.
+#
+# 깊이는 value에 남겨 종합 단계가 다른 신호와 함께 볼 수 있게 한다.
 
 # 서브도메인 라벨에 TLD가 끼어 있는지 검사할 때 쓰는 집합.
 #
@@ -109,50 +164,67 @@ def check_dga_pattern(result: ParseResult) -> AnalysisRecord:
     만들어 내는 기법이다. 차단 목록이 따라잡기 전에 도메인을 갈아치우는 것이
     목적이라 사람이 읽을 수 없는 무작위 문자열이 된다.
 
-    사람이 지은 이름과 기계가 만든 문자열은 세 가지 통계로 갈린다.
-      1. 섀넌 엔트로피 — 글자가 고르게 흩어져 있는가
-      2. 모음 비율    — 읽을 수 있는 단어는 모음이 30~45% 안팎이다
-      3. 연속 자음    — 영어에서 자음 5개가 끊기지 않고 이어지는 일은 드물다
+    판정은 두 조건을 AND로 묶는다.
+      1. 최대 연속 비모음 >= 7  — 발음할 수 없는 구간이 길다
+      2. 섀넌 엔트로피 >= 3.0   — 글자 종류가 충분히 다양하다
+
+    [왜 AND인가]
+    두 지표의 역할이 다르다. 연속 비모음이 후보를 만들고, 엔트로피가 그중
+    "알고리즘 생성물이 아닌 것"을 걷어낸다. adminnnnnnnnni(C=9, H=1.63)나
+    sdsfdfsdf(C=9, H=1.58)는 발음은 불가능하지만 글자 종류가 빈약해 무작위
+    생성물이 아니다. 엔트로피 조건이 이런 2,446건을 걸러낸다.
+
+    엔트로피를 OR로 두거나 단독 트리거로 쓰면 안 된다. 악성과 영어 단어의
+    엔트로피 분포가 거의 겹쳐(중앙값 3.18 대 2.95) 판별력이 없고, 길이로
+    정규화하면 오히려 영어 단어가 더 높게 나온다.
+
+    [모음 비율은 쓰지 않는다]
+    초안에 있던 지표지만 악성 0.38 / 영어 단어 0.40으로 사실상 같아 판별력이
+    없다. 계산도 하지 않는다.
 
     [검사 대상에서 빼는 것]
-    8자 미만은 표본이 적어 엔트로피가 심하게 왜곡된다. 숫자로만 이루어진
-    도메인은 모음·자음이라는 개념 자체가 성립하지 않는다.
+    8자 미만은 표본이 적어 지표가 심하게 왜곡된다. 알파벳이 하나도 없는
+    문자열(숫자 나열, IP 호스트)은 모음·자음이라는 개념 자체가 성립하지 않는다.
     """
     name = GROUP_E_DGA_PATTERN
     extracted = result.extracted
+    parsed = result.parsed
 
     if extracted is None or not extracted.domain:
         return not_applicable(name)
 
+    # IP 호스트는 도메인 라벨이 아니다. 파서의 host_type으로 직접 거른다.
+    # 문자열만 보고 판단하면 IPv6가 빠져나간다 — 16진수라 a~f가 들어 있어
+    # "알파벳이 있는가" 검사를 통과한다.
+    if parsed is not None and parsed.host_type in ("IPV4", "IPV6"):
+        return not_applicable(name)
+
     domain = extracted.domain.lower()
 
-    if len(domain) < _DGA_MIN_DOMAIN_LENGTH or domain.isdigit():
+    # 알파벳이 하나도 없으면 모음·자음이라는 개념이 성립하지 않는다.
+    # isdigit()만으로는 부족하다 — IP 호스트는 tldextract가 domain을
+    # '192.168.0.1'로 돌려주는데 점 때문에 isdigit()이 False가 된다.
+    if len(domain) < _DGA_MIN_DOMAIN_LENGTH or not any(
+        ch.isalpha() for ch in domain
+    ):
         return not_applicable(name)
 
     entropy = _shannon_entropy(domain)
-    vowel_ratio = _vowel_ratio(domain)
     max_consecutive = _max_consecutive_consonants(domain)
 
     observation = {
         "domain": domain,
         "shannon_entropy": round(entropy, 2),
-        "vowel_ratio": round(vowel_ratio, 2),
         "max_consec_consonants": max_consecutive,
     }
 
-    # 유형 1 — 엔트로피가 높으면서 모음 비율이 양극단에 있다.
-    # 두 조건을 함께 걸어야 한다. 엔트로피만 보면 정상 긴 도메인이 걸리고,
-    # 모음 비율만 보면 짧은 약어가 걸린다.
-    if entropy >= _DGA_ENTROPY_THRESHOLD and (
-        vowel_ratio < _DGA_VOWEL_RATIO_LOW or vowel_ratio > _DGA_VOWEL_RATIO_HIGH
+    # 발음 불가 구간이 길면서(후보 선별) 글자 종류도 다양하면(생성물 확인) 탐지.
+    # detection_type을 두지 않는다. 유형이 하나뿐이라 값이 정보를 담지 못한다.
+    if (
+        max_consecutive >= _DGA_MAX_CONSECUTIVE_CONSONANTS
+        and entropy >= _DGA_ENTROPY_THRESHOLD
     ):
-        return detected(name, {**observation, "detection_type": "ENTROPY_VOWEL"})
-
-    # 유형 2 — 자음이 지나치게 길게 이어진다. 엔트로피와 무관하게 성립한다.
-    if max_consecutive >= _DGA_MAX_CONSECUTIVE_CONSONANTS:
-        return detected(
-            name, {**observation, "detection_type": "CONSECUTIVE_CONSONANT"}
-        )
+        return detected(name, observation)
 
     # 미탐지여도 계산한 지표는 남긴다. 판정을 수행했다는 사실 자체가 증거이고,
     # 임계값을 나중에 재조정할 때 근거가 된다.
@@ -174,14 +246,6 @@ def _shannon_entropy(text: str) -> float:
         (count / length) * math.log2(count / length)
         for count in Counter(text).values()
     )
-
-
-def _vowel_ratio(text: str) -> float:
-    """전체 글자 수 대비 모음 비율. 알파벳이 하나도 없으면 0.0."""
-    letters = [ch for ch in text if ch.isalpha()]
-    if not letters:
-        return 0.0
-    return sum(1 for ch in letters if ch in _VOWELS) / len(letters)
 
 
 def _max_consecutive_consonants(text: str) -> int:
@@ -375,9 +439,6 @@ def check_host_spoofing(result: ParseResult) -> AnalysisRecord:
         {
             "spoofed_host": parsed.username,
             "actual_dst_host": parsed.hostname,
-            # 비밀번호 자리까지 쓴 경우가 있다. 값 자체는 남기지 않고
-            # 존재 여부만 기록한다 — 자격증명이 레코드에 실리면 안 된다.
-            "has_password": bool(parsed.password),
         },
     )
 
@@ -395,11 +456,14 @@ def check_subdomain_anomaly(result: ParseResult) -> AnalysisRecord:
     사람은 왼쪽부터 읽다가 naver.com을 보고 네이버로 착각한다. 실제 등록
     도메인은 맨 오른쪽 evil-host.com이다.
 
-    [깊이 임계가 3이 아니라 4인 이유]
+    [깊이는 탐지 트리거가 아니다]
     s3.dualstack.us-east-1.amazonaws.com 처럼 정상 인프라가 깊이 3을 쓰는
-    경우가 흔하다. 3을 기준으로 삼으면 AWS·CDN 계열이 대량 오탐된다. 깊이만으로는
-    판별력이 약하므로 임계를 한 단계 올리고, 깊이 자체는 탐지 여부와 무관하게
-    value에 남겨 종합 단계가 참고할 수 있게 한다.
+    경우가 흔하다. 깊이만으로는 "수상하다"는 주장을 뒷받침하지 못하므로
+    트리거에서 빼고, 값은 value에 남겨 종합 단계가 다른 신호와 함께 보게 한다.
+
+    반면 서브도메인에 TLD가 끼어 있는 것은 구조적으로 설명할 이유가 없다.
+    naver.com.evil-host.com 에서 왼쪽 naver.com은 브랜드를 읽히게 하려는
+    목적 외에는 존재 이유가 없다.
 
     [TLD 목록으로 PSL을 쓰는 이유]
     AWS Route53의 "등록 가능 TLD 목록"은 쓰지 않는다. 그것은 "AWS에서 살 수
@@ -414,30 +478,20 @@ def check_subdomain_anomaly(result: ParseResult) -> AnalysisRecord:
 
     subdomain = extracted.subdomain.lower()
     labels = [label for label in subdomain.split(".") if label]
-    depth = len(labels)
 
     # 서브도메인 라벨 중 PSL에 등재된 TLD가 있는지 본다.
-    # www는 흔한 정상 라벨이라 제외하지 않으면 대부분의 도메인이 걸린다 —
-    # 다만 www는 PSL에 없으므로 자연히 걸러진다.
+    # www는 흔한 정상 라벨이지만 PSL에 없으므로 자연히 걸러진다.
     spoofed_tlds = [label for label in labels if label in _PSL_SUFFIXES]
 
+    # 깊이는 탐지 여부와 무관하게 항상 기록한다. 판정에는 쓰지 않는다.
     observation = {
         "subdomain": subdomain,
-        "subdomain_depth": depth,
-        "tld_spoofing_detected": bool(spoofed_tlds),
+        "subdomain_depth": len(labels),
     }
 
-    detection_type = []
+    # detection_type을 두지 않는다. 유형이 하나뿐이라 값이 정보를 담지 못한다.
     if spoofed_tlds:
-        detection_type.append("TLD_IN_SUBDOMAIN")
-    if depth >= _SUBDOMAIN_DEPTH_THRESHOLD:
-        detection_type.append("DEEP_SUBDOMAIN")
-
-    if detection_type:
-        value = {"detection_type": detection_type, **observation}
-        if spoofed_tlds:
-            value["matched_tlds"] = spoofed_tlds
-        return detected(name, value)
+        return detected(name, {**observation, "matched_tlds": spoofed_tlds})
 
     # 미탐지여도 깊이와 검사 결과는 남긴다.
     return not_applicable(name, value=observation)
