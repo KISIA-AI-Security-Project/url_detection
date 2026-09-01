@@ -11,10 +11,10 @@ class RuntimeConfig:
     ``fetch_external_scripts``를 활성화한 경우에만 제한적으로 수집한다.
     """
 
-    request_timeout_seconds: float = 10.0
-    max_redirects: int = 5
-    max_html_bytes: int = 2_000_000
-    max_script_bytes: int = 1_000_000
-    max_external_scripts: int = 20
-    fetch_external_scripts: bool = False
-    max_javascript_events: int = 10_000
+    request_timeout_seconds: float = 10.0  # 개별 HTTP 요청 제한 시간(초)
+    max_redirects: int = 5  # 요청당 허용할 최대 Redirect 횟수
+    max_html_bytes: int = 2_000_000  # 수집·분석할 HTML 최대 크기(Byte)
+    max_script_bytes: int = 1_000_000  # JavaScript Source 하나의 최대 크기(Byte)
+    max_external_scripts: int = 20  # 페이지당 수집할 외부 Script 최대 개수
+    fetch_external_scripts: bool = False  # 외부 Script Source의 네트워크 수집 여부
+    max_javascript_events: int = 10_000  # 분석 중 보존할 JavaScript Event 최대 개수
