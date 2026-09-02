@@ -28,7 +28,7 @@ def analyze(
             detected=None,
             error=fatal,
         )
-    brand, current, error = brand_evidence(raw, document_url, policy)
+    brand, current, identification, error = brand_evidence(raw, document_url, policy)
     if error:
         return signal_result(
             "L3-H-05",
@@ -46,6 +46,10 @@ def analyze(
     )
     evidence = {
         "detected_brand": brand,
+        "brand_identification_sources": identification["sources"],
+        "brand_identification_confidence": identification["confidence"],
+        "brand_policy_provider": identification["provider"],
+        "brand_policy_entity_id": identification["provider_entity_id"],
         "current_domain": current,
         "expected_domains": expected,
     }

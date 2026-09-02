@@ -61,3 +61,23 @@ def etld1(value: str | None) -> str | None:
     if registered is None:
         registered = extracted.registered_domain
     return registered or None
+
+
+def registrable_domain_label(value: str | None) -> str | None:
+    """HTTP(S) URL 또는 Domain에서 public suffix 바로 앞의 등록 Label을 반환한다."""
+    if value is None:
+        return None
+    candidate = value if "://" in value else f"https://{value}"
+    if not is_http_url(candidate):
+        return None
+    try:
+        hostname = cast(str | None, urlsplit(candidate).hostname)
+        if hostname is None:
+            return None
+        ipaddress.ip_address(hostname)
+        return None
+    except ValueError:
+        pass
+    assert hostname is not None
+    extracted = _EXTRACT(hostname)
+    return extracted.domain or None

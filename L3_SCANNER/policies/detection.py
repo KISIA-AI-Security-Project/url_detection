@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
 CredentialClassifier = Callable[[Mapping[str, Any]], str | None]
-BrandIdentifier = Callable[[Mapping[str, Any]], str | None]
+BrandIdentifier = Callable[[Mapping[str, Any]], str | Mapping[str, Any] | None]
 BranchBehaviorNormalizer = Callable[[Mapping[str, Any]], str | None]
 
 
@@ -33,3 +33,5 @@ class DetectionPolicy:
     redirect_apis: frozenset[str] | None = None
     anti_bot_properties: frozenset[str] | None = None
     branch_behavior_normalizer: BranchBehaviorNormalizer | None = None
+    policy_name: str | None = None
+    brand_policy_metadata: Mapping[str, Any] | None = None

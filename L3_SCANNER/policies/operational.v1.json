@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "policy_name": "operational-v1",
+  "credential_fields": {
+    "type_mapping": {
+      "password": "password",
+      "email": "email"
+    },
+    "autocomplete_mapping": {
+      "current-password": "password",
+      "new-password": "password",
+      "username": "username",
+      "email": "email"
+    },
+    "identifier_tokens": {
+      "password": ["password", "passwd", "passcode"],
+      "email": ["email", "e-mail"],
+      "username": ["username", "user_name", "user-id", "userid", "login"]
+    }
+  },
+  "brands": {},
+  "brand_resources": {
+    "shared_domains": []
+  },
+  "javascript": {
+    "dynamic_execution_apis": ["eval", "Function"],
+    "decode_methods": ["atob", "decodeURIComponent", "unescape"],
+    "network_apis": ["fetch", "navigator.sendBeacon", "XMLHttpRequest.open"],
+    "redirect_apis": [
+      "location.replace",
+      "location.assign",
+      "location.href",
+      "window.location"
+    ],
+    "anti_bot_properties": [
+      "navigator.webdriver",
+      "navigator.plugins",
+      "navigator.languages",
+      "window.chrome"
+    ],
+    "branch_behavior_normalization": "canonical_json"
+  }
+}

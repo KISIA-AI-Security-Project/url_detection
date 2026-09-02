@@ -16,3 +16,7 @@ dependencies = { file = ["L3_SCANNER/requirements.txt"] }
 [tool.setuptools.packages.find]
 include = ["L3_SCANNER*"]
 exclude = ["L3_SCANNER.tests*"]
+
+[tool.setuptools.package-data]
+"L3_SCANNER.policies" = ["*.json"]
+"L3_SCANNER.brands" = ["data/*.json", "data/*.txt", "data/*.md"]

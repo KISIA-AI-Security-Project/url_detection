@@ -21,7 +21,7 @@
 | 도메인 단위 | `tldextract 5.3.2` — 내장 PSL snapshot 사용, IP literal은 eTLD+1로 만들지 않음 |
 | JavaScript 분석 | `esprima 4.0.1` — ESTree 기반 정적 분석, 제한적 Credential taint/Source-Sink 계보 추적 |
 | 저장 | 내장 저장소 없음. CLI는 표준 출력 또는 `--output`으로 Raw/Signal JSON 두 파일을 기록 |
-| 테스트 | `pytest` — 현재 69개 테스트, Mock Transport/고정 Fixture 사용, 정상 테스트는 실제 네트워크 미사용 |
+| 테스트 | `pytest` — 현재 96개 테스트, Mock Transport/고정 Fixture 사용, 정상 테스트는 실제 네트워크 미사용 |
 | 정적 검사 | Ruff, mypy 설정(`L3_SCANNER/mypy.ini`) — 개발 도구 버전은 프로젝트 의존성에 고정되어 있지 않음 |
 | 환경변수 | 현재 없음 |
 | 필요 네트워크 | `scan_url`: DNS와 대상 HTTP 80/HTTPS 443. `scan_content`: 네트워크 불필요 |
@@ -64,7 +64,7 @@ python -m pip install -e .
 python -m pip install lxml
 ```
 
-기본 URL 스캔은 페이지 HTML과 Inline JavaScript를 분석한다. 외부 `<script src>` URL은 Raw에 남지만 Source는 가져오지 않는다.
+기본 URL 스캔은 `operational-v1` 탐지 정책으로 페이지 HTML과 Inline JavaScript를 분석한다. 외부 `<script src>` URL은 Raw에 남지만 Source는 가져오지 않는다.
 
 ```bash
 python -m L3_SCANNER.main https://example.com
@@ -78,11 +78,11 @@ python -m L3_SCANNER.main \
   https://example.com
 ```
 
-AWS smoke test용 임시 정책과 외부 JavaScript 제한 수집을 함께 활성화하고 결과를 파일로 저장하려면 다음과 같이 실행한다.
+운영 정책과 외부 JavaScript 제한 수집을 함께 사용해 결과를 파일로 저장하려면 다음과 같이 실행한다.
 
 ```bash
 python -m L3_SCANNER.main \
-  --all \
+  --fetch-external-scripts \
   --output results/l3.json \
   https://example.com
 ```
@@ -91,7 +91,129 @@ python -m L3_SCANNER.main \
 파일에는 동일한 `schema_version`, `layer`, `target`, `scan`, `errors`가 포함되어
 같은 Scan의 결과임을 추적할 수 있다.
 
-`--all`이 사용하는 `aws-smoke-v1`은 Parser·Analyzer 경로 확인용 임시 정책이다. 운영 악성/정상 판정 정책이 아니며 현재 테스트 대상 브랜드 값도 포함하므로 운영에 그대로 사용하지 않는다.
+기본 정책 파일은 `policies/operational.v1.json`이다. Credential Field와 공통
+JavaScript API 집합은 기본 제공하지만 특정 서비스의 브랜드명이나 공식 도메인을
+하드코딩하지 않는다. 운영 브랜드 정책의 단일 외부 공급원은 Wikidata이며, 별도
+동기화 명령이 생성한 로컬 캐시만 Scanner에 주입한다. Analyzer는 Wikidata를 직접
+호출하지 않는다.
+
+브랜드명을 한 줄에 하나씩 기록한 파일로 캐시를 생성한다. 동명 Item, 검색 실패,
+현재 `P856` 공식 웹사이트 부재 항목은 `unresolved`에 보존되며 탐지 정책에 포함되지
+않는다. 운영 환경의 `--user-agent`에는 연락 가능한 정보를 포함하는 것이 좋다.
+
+브랜드명 파일 대신 Cloudflare Radar의 ordered global top Domain을 사용할 수 있다.
+Cloudflare는 후보 순위만 제공하고, 각 Domain이 Wikidata `P856`과 일치할 때만
+브랜드 정책에 포함된다. API Token은 지정한 환경변수에서만 읽으며 캐시·로그·결과에
+저장하지 않는다. Cloudflare가 정확한 순서를 제공하는 범위에 맞춰 N은 1~100이다.
+
+```bash
+export CLOUDFLARE_API_TOKEN="..."
+
+python -m L3_SCANNER.brands.main \
+  --cloudflare-top-domains 100 \
+  --user-agent "L3-Scanner/1.0 (security@example.com)" \
+  --output L3_SCANNER/brands/data/wikidata-brands.json
+```
+
+`selection.provider=cloudflare_radar`, 선정 Domain·순위, Wikidata QID와 revision이
+캐시에 남아 어떤 Ranking 후보가 어떤 Wikidata 정책으로 확정됐는지 추적할 수 있다.
+
+```bash
+python -m L3_SCANNER.brands.main \
+  --brand-file /path/to/brands.txt \
+  --user-agent "L3-Scanner/1.0 (security@example.com)" \
+  --output L3_SCANNER/brands/data/wikidata-brands.json
+```
+
+기존 캐시의 요청 브랜드 전체를 다시 조회해 주기적으로 갱신할 수 있다.
+
+```bash
+python -m L3_SCANNER.brands.main \
+  --refresh-cache L3_SCANNER/brands/data/wikidata-brands.json \
+  --output L3_SCANNER/brands/data/wikidata-brands.json
+```
+
+```bash
+python -m L3_SCANNER.main \
+  --wikidata-brand-cache L3_SCANNER/brands/data/wikidata-brands.json \
+  --fetch-external-scripts \
+  https://example.com
+```
+
+수동 정책 JSON의 `brands` 구조는 하위 호환을 위해 유지하지만 Wikidata 캐시와
+동시에 주입할 수 없다. 이는 브랜드·공식 도메인이 다른 공급원과 조용히 혼합되는
+것을 막는다. 제목 또는 `og:site_name`에서 동시에 여러 브랜드가 일치하면 브랜드를
+확정하지 않는다.
+
+```json
+{
+  "brands": {
+    "your-brand": {
+      "title_tokens": ["Your Brand"],
+      "site_name_tokens": ["Your Brand"],
+      "hostname_tokens": ["yourbrand", "your-brand"],
+      "expected_domains": ["example.com"],
+      "resource_domains": ["example-cdn.com"]
+    }
+  },
+  "brand_resources": {
+    "shared_domains": ["shared-cdn.com"]
+  }
+}
+```
+
+실제 파일에는 위 항목 외에도 기본 정책 파일의 `schema_version`, Credential,
+JavaScript 설정이 모두 필요하다. 알 수 없는 필드, 잘못된 Domain, 빈 필수 API
+목록은 Scanner가 네트워크 요청을 시작하기 전에 거부한다.
+
+`hostname_tokens`는 URL 전체가 아니라 IDNA 정규화된 Hostname Label에만 적용한다.
+Token과 Label이 같거나 `-` 경계로 구분된 경우만 일치하며 Path·Query는 검사하지
+않는다. Hostname만으로 브랜드가 식별되면 `brand_identification_confidence=low`,
+제목이나 `og:site_name` 근거가 있으면 `high`를 Evidence에 기록한다. L3는 가중치를
+계산하지 않으며 downstream Rule/LLM이 이 값을 사용한다.
+
+Wikidata 캐시는 현재 공식 웹사이트 속성 `P856`의 non-deprecated Statement를 읽고,
+종료 시각이 지난 URL을 제외하며 preferred rank가 있으면 그것만 사용한다. H-05는
+그 Domain으로 평가한다. `P856`에는 CDN·브랜드 Resource 소유 정보가 없으므로 H-06은
+현재/공식 Domain 안의 Resource만 `false`로 확인하고 알 수 없는 외부 Resource는
+`detected=null`로 유지한다.
+
+## URL Feed 데이터셋 테스트
+
+`url`, `sources`, `source_status`, `first_seen` 열을 가진 CSV 또는 단일 CSV가 든
+ZIP을 입력할 수 있다. ZIP은 디스크에 풀지 않고 스트리밍하며 데이터셋의 URL을
+탐지 정책이나 정답 Label로 사용하지 않는다.
+
+네트워크 요청 없이 전체 데이터셋의 행 수, 활성 상태, HTTP(S) 적합성, 제외 사유를
+확인한다.
+
+```bash
+python -m L3_SCANNER.dataset_main /path/to/dataset.zip
+```
+
+실제 악성 URL 수집은 자동으로 시작되지 않는다. `--scan`과 양수 `--limit`, 출력
+디렉터리를 모두 명시해야 하며 기본적으로 활성 상태의 HTTP(S) URL만 순차 처리한다.
+
+```bash
+python -m L3_SCANNER.dataset_main /path/to/dataset.zip \
+  --scan \
+  --limit 10 \
+  --offset 0 \
+  --fetch-external-scripts \
+  --output-dir results/dataset-smoke
+```
+
+각 URL은 `row-<행>-<URL 해시>_raw.json`과
+`row-<행>-<URL 해시>_signals.json`으로 분리되며, `manifest.json`에 원본 행
+메타데이터·처리 상태·출력 파일명이 기록된다. `--include-inactive`를 지정하지 않으면
+`ACTIVE`, `online`, `yes` 상태만 포함하고 `INACTIVE`, `offline` 표시는 우선 제외한다.
+
+데이터셋 CLI에서도 요청 시간, Redirect, HTML/Script 크기, 외부 Script 개수,
+JavaScript Event 상한을 명시적으로 조정할 수 있지만 무제한 값은 허용하지 않는다.
+
+이 URL Feed에는 정상 대조군, 브랜드 정답/공식 도메인, HTML·JavaScript Snapshot이
+없으므로 False Positive 평가, `L3-H-03` 정책 확정, 브랜드 Signal 정답 생성에는 별도
+Dataset/Policy가 필요하다.
 
 전체 검증:
 
@@ -195,6 +317,7 @@ target
   etld1
 scan
   status           # completed | failed
+  policy_name      # 적용한 운영 정책 버전
   started_at
   finished_at
 raw
@@ -243,7 +366,15 @@ Lambda·Step Functions·S3 통합이 필요하면 별도 Adapter/Handler와 저�
 ```text
 L3_SCANNER/
 ├── main.py                     # CLI: URL 한 건 → 표준 출력 또는 --output JSON
+├── dataset_main.py             # URL Feed 사전 검사와 명시적 제한 배치 CLI
+├── dataset.py                  # ZIP/CSV 스트리밍·필터·배치 Orchestration
 ├── l3_scanner.py               # Orchestrator: scan_url + scan_content + 결과 조립
+├── output.py                   # Raw/Signal JSON 분리 저장 공통 도우미
+├── brands/                     # 브랜드 선정·정책 데이터셋 통합 관리
+│   ├── main.py                 # 브랜드 캐시 생성·갱신 CLI
+│   ├── cloudflare.py           # Radar ordered top Domain 제한 수집
+│   ├── wikidata.py             # P856 동기화·검증·버전형 로컬 캐시
+│   └── data/                   # 생성 캐시와 선택적 브랜드명 입력
 ├── requirements.txt            # Runtime Python 의존성
 ├── mypy.ini                    # Python 3.13 기준 type-check 설정
 │
@@ -303,7 +434,8 @@ L3_SCANNER/
 ├── policies/
 │   ├── detection.py            # Open Detection Policy의 명시적 주입 계약
 │   ├── runtime.py              # 수집·분석 자원 상한
-│   └── experimental.py         # aws-smoke-v1 임시 정책, 운영 사용 금지
+│   ├── operational.py          # JSON 검증과 범용 운영 정책 Builder
+│   └── operational.v1.json     # 기본 operational-v1 정책 값
 │
 ├── utils/
 │   ├── url.py                  # HTTP(S) 해석과 PSL 기반 eTLD+1
@@ -319,7 +451,10 @@ L3_SCANNER/
     ├── test_html_signals.py
     ├── test_javascript_signals.py
     ├── test_l3_scanner.py
-    └── test_experimental_policy.py
+    ├── test_dataset.py
+    ├── test_cloudflare_selection.py
+    ├── test_operational_policy.py
+    └── test_wikidata_policy.py
 ```
 
 ## 안전장치·출력 규칙
@@ -352,22 +487,17 @@ L3_SCANNER/
 - 외부 Script Source는 기본적으로 수집하지 않는다. Source 부재는 URL과 오류를 보존하고 JavaScript 음성 결과로 바꾸지 않는다.
 - `scan_content`는 `RuntimeConfig.fetch_external_scripts=True`여도 외부 Source를 가져오지 않는다. Upstream이 `scripts[].source`를 제공해야 한다.
 - `scan_url`은 HTTP error status도 수집 오류로 남긴다. 응답이 분석 가능한 HTML이면 관측 가능한 Raw와 Signal은 함께 보존할 수 있다.
-- 브랜드·Credential·API 집합 등 Open Policy가 없으면 객관적 Raw는 남기되 관련 Signal을 임의 확정하지 않는다.
+- 미등록 브랜드는 객관적 Raw를 남기되 관련 Signal을 음성으로 확정하지 않는다.
 
 ## 현재 미확정·미구현 항목
 
-명세상 Open Policy는 `DetectionPolicy`로 주입하되 임의 기본값을 두지 않는다.
+범용 Credential/API 값은 `operational-v1`에서 명시적으로 버전 관리한다. 특정 브랜드와
+공식·허용 Resource Domain은 조직별 운영 정책에 주입하며 기본값을 만들지 않는다.
 
 ```text
-Credential Field Classification
 L3-H-03 detected semantics와 Multi-Form Evidence contract
-Brand Identification / Expected Domain / Resource Matching
-Dynamic Execution / Decode / Network / Redirect API set
-Anti-Bot property set
-Branch behavior normalization
 Static reference와 Runtime execution 의미 구분 정책
 L3-J-06 Source-Sink 정밀도 확장
-외부 Script 운영 Fetch Policy
 L4 Trigger rule / threshold
 ```
 

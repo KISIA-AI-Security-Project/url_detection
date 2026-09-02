@@ -235,6 +235,12 @@ class L3Scanner:
                     if bool(html_raw.get("document", {}).get("parse_succeeded"))
                     else "failed"
                 ),
+                "policy_name": self.policy.policy_name,
+                "brand_policy": (
+                    dict(self.policy.brand_policy_metadata)
+                    if self.policy.brand_policy_metadata is not None
+                    else None
+                ),
                 "started_at": started_at,
                 "finished_at": finished_at,
             },

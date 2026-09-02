@@ -61,7 +61,9 @@ def analyze(
             error=fatal,
         )
     resources = _resources(raw)
-    brand, current, brand_error = brand_evidence(raw, document_url, policy)
+    brand, current, identification, brand_error = brand_evidence(
+        raw, document_url, policy
+    )
     if brand_error:
         return signal_result(
             "L3-H-06",
@@ -81,6 +83,10 @@ def analyze(
         **first,
         "resources": resources,
         "detected_brand": brand,
+        "brand_identification_sources": identification["sources"],
+        "brand_identification_confidence": identification["confidence"],
+        "brand_policy_provider": identification["provider"],
+        "brand_policy_entity_id": identification["provider_entity_id"],
         "current_domain": current,
     }
     rules = policy.brand_resource_rules if policy is not None else None

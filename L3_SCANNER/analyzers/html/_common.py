@@ -66,16 +66,22 @@ def normalize_expected_domain(value: str) -> str | None:
 
 def brand_evidence(
     raw: Mapping[str, Any], document_url: str, policy: DetectionPolicy | None
-) -> tuple[str | None, str | None, dict[str, Any] | None]:
+) -> tuple[str | None, str | None, dict[str, Any], dict[str, Any] | None]:
     """브랜드 식별 정책에 객관적 문서 문맥을 제공하고 현재 도메인과 함께 반환한다.
 
     브랜드-도메인 매핑은 이 함수가 추측하지 않는다. 정책 Callable의 예외는 구조화해
     두 브랜드 Signal이 동일한 방식으로 오류를 보고하도록 한다.
     """
     current_domain = etld1(document_url)
+    identification: dict[str, Any] = {
+        "sources": [],
+        "confidence": None,
+        "provider": None,
+        "provider_entity_id": None,
+    }
     identifier = policy.brand_identifier if policy is not None else None
     if identifier is None:
-        return None, current_domain, None
+        return None, current_domain, identification, None
     context = {
         "document": raw.get("document", {}),
         "open_graph": raw.get("open_graph", {}),
@@ -83,15 +89,52 @@ def brand_evidence(
         "favicon": raw.get("favicon"),
     }
     try:
-        brand = identifier(context)
+        identified = identifier(context)
     except Exception as exc:
         return (
             None,
             current_domain,
+            identification,
             {
                 "code": "brand_policy_error",
                 "message": str(exc),
                 "exception": type(exc).__name__,
             },
         )
-    return str(brand) if brand else None, current_domain, None
+    if isinstance(identified, Mapping):
+        brand = identified.get("brand")
+        sources = identified.get("sources", [])
+        confidence = identified.get("confidence")
+        provider = identified.get("provider")
+        provider_entity_id = identified.get("provider_entity_id")
+        if (
+            not isinstance(brand, str)
+            or not brand
+            or not isinstance(sources, list)
+            or any(not isinstance(source, str) for source in sources)
+            or confidence not in {"low", "high"}
+            or (provider is not None and not isinstance(provider, str))
+            or (
+                provider_entity_id is not None
+                and not isinstance(provider_entity_id, str)
+            )
+        ):
+            return (
+                None,
+                current_domain,
+                identification,
+                {"code": "brand_policy_error", "message": "invalid brand result"},
+            )
+        identification = {
+            "sources": list(dict.fromkeys(sources)),
+            "confidence": confidence,
+            "provider": provider,
+            "provider_entity_id": provider_entity_id,
+        }
+        return brand, current_domain, identification, None
+    return (
+        str(identified) if identified else None,
+        current_domain,
+        identification,
+        None,
+    )
