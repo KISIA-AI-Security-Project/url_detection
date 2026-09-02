@@ -1,5 +1,5 @@
 """HTTP Collector 순수 함수(네트워크 무관 부분) 단위 테스트."""
-from collectors.http_collector import _blocked_destination
+from l2_scanner.collectors.http_collector import _blocked_destination
 
 
 class TestBlockedDestination:
