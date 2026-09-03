@@ -1,0 +1,13 @@
+{
+  "version": "v1.20260828",
+  "active": [
+    {"suffix": "io", "server": "https://rdap.identitydigital.services/rdap/", "basis": "2026-08-28 httpx GET domain/nic.io → 200, objectClassName=domain, events 4종", "listed_on": "2026-08-28"},
+    {"suffix": "me", "server": "https://rdap.identitydigital.services/rdap/", "basis": "2026-08-28 httpx GET domain/nic.me → 200, objectClassName=domain, events 4종", "listed_on": "2026-08-28"},
+    {"suffix": "de", "server": "https://rdap.denic.de/", "basis": "2026-08-28 httpx GET domain/denic.de → 200, objectClassName=domain (events는 last changed만)", "listed_on": "2026-08-28"}
+  ],
+  "candidates": [
+    {"suffix": "ru", "server": null, "basis": "2026-08-28 미확인 — rdap.nic.ru는 yandex.ru·nic.ru에 404(등록대행사 서버로 보임), TCI 계열 flexireg·nic.tatar·nic.дети도 404, rdap.tcinet.ru·rdap.ripn.net은 DNS 없음", "listed_on": "2026-08-28"},
+    {"suffix": "co", "server": null, "basis": "2026-08-28 미확인 — rdap.nic.co·rdap.registry.godaddy·rdap.cointernet.co는 DNS 없음, GoDaddy Registry 계열 nic.biz·nic.club·nic.design·nic.nyc는 nic.co·go.co에 404", "listed_on": "2026-08-28"},
+    {"suffix": "cn", "server": null, "basis": "2026-08-28 미확인 — rdap.cnnic.cn·rdap.cnnic.net.cn·rdap.nic.cn은 DNS 없음, CNNIC 계열 rdap.ngtld.cn은 baidu.cn·cnnic.cn에 404", "listed_on": "2026-08-28"}
+  ]
+}

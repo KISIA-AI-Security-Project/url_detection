@@ -1,5 +1,5 @@
 """Header Analyzer 8종 단위 테스트 — 가짜 Raw Data 주입, 네트워크 없음."""
-from analyzers.header import (
+from l2_scanner.analyzers.header import (
     redirect_chain,
     redirect_domain_change,
     redirect_to_ip,
@@ -36,6 +36,18 @@ def hop(src, dst, code=302):
     return {"source_url": src, "destination_url": dst, "status_code": code, "location": dst}
 
 
+def make_unreachable_raw(**overrides) -> dict:
+    """첫 접속부터 실패해 아무 응답도 관측 못 한 Raw Data (DNS 실패·연결 거부 등).
+
+    검사 자체가 불가한 경우 detected는 false가 아니라 null이어야 한다 (팀 리뷰 반영).
+    """
+    return make_raw(
+        final_url=None, status_code=None,
+        errors=[{"url": "http://a.com", "error": "connection refused"}],
+        **overrides,
+    )
+
+
 # ---------- L2-H-01 redirect_chain ----------
 
 class TestRedirectChain:
@@ -53,6 +65,15 @@ class TestRedirectChain:
         assert signal["detected"] is True
         assert signal["evidence"]["redirect_count"] == 2
         assert signal["evidence"]["chain"] == ["http://b.com", "http://c.com"]
+
+    def test_unknown_when_nothing_observed(self):
+        # 첫 접속부터 실패 = 여정 자체를 관측 못 함 → 판정 불가(null), false 아님
+        assert redirect_chain.analyze(make_unreachable_raw())["detected"] is None
+
+    def test_hops_observed_before_failure_still_detected(self):
+        # 중간까지 따라가다 실패해도 관측된 hop으로는 판정 가능
+        raw = make_unreachable_raw(redirect_chain=[hop("http://a.com", "http://b.com")])
+        assert redirect_chain.analyze(raw)["detected"] is True
 
 
 # ---------- L2-H-02 redirect_domain_change ----------
@@ -82,6 +103,9 @@ class TestRedirectDomainChange:
         assert evidence["unique_domain_count"] == 3
         assert evidence["final_domain_changed"] is True
 
+    def test_unknown_when_nothing_observed(self):
+        assert redirect_domain_change.analyze(make_unreachable_raw())["detected"] is None
+
 
 # ---------- L2-H-03 redirect_to_ip ----------
 
@@ -100,6 +124,14 @@ class TestRedirectToIp:
         signal = redirect_to_ip.analyze(raw)
         assert signal["detected"] is False
         assert signal["evidence"]["destination_ip"] is None
+
+    def test_unknown_when_nothing_observed(self):
+        assert redirect_to_ip.analyze(make_unreachable_raw())["detected"] is None
+
+    def test_ip_hop_observed_before_failure_still_detected(self):
+        # 악성 IP가 봇 접속을 차단해 접속은 실패해도 hop 관측만으로 탐지되어야 한다
+        raw = make_unreachable_raw(redirect_chain=[hop("http://a.com", "http://93.184.216.34/")])
+        assert redirect_to_ip.analyze(raw)["detected"] is True
 
 
 # ---------- L2-H-04 url_shortener ----------
@@ -130,6 +162,15 @@ class TestUrlShortener:
         )
         assert url_shortener.analyze(raw)["detected"] is True
 
+    def test_unreachable_shortener_still_detected(self):
+        # 출발 URL의 명단 대조는 문자열만으로 가능 → 접속 실패해도 true 확정
+        raw = make_unreachable_raw(original_url="https://bit.ly/x")
+        assert url_shortener.analyze(raw)["detected"] is True
+
+    def test_unknown_when_nothing_observed(self):
+        # 출발 URL이 명단에 없고 여정도 관측 못 함 — 중간 경유 여부를 알 수 없다 → null
+        assert url_shortener.analyze(make_unreachable_raw())["detected"] is None
+
 
 # ---------- L2-H-05 content_type_mismatch ----------
 
@@ -150,8 +191,16 @@ class TestContentTypeMismatch:
         )
         assert content_type_mismatch.analyze(raw)["detected"] is False
 
-    def test_unknown_is_not_mismatch(self):
-        assert content_type_mismatch.analyze(make_raw())["detected"] is False
+    def test_unknown_is_null_not_false(self):
+        # 한쪽이라도 확인 안 됐으면 비교 자체가 불가 → null (팀 리뷰 반영: 검사 불가 ≠ 불일치 없음)
+        assert content_type_mismatch.analyze(make_raw())["detected"] is None
+
+    def test_match_confirmed_is_false(self):
+        raw = make_raw(
+            headers={"content_type": "text/html"},
+            response_body={"detected_type": "text/html"},
+        )
+        assert content_type_mismatch.analyze(raw)["detected"] is False
 
 
 # ---------- L2-H-06 dangerous_file_download ----------
@@ -183,6 +232,10 @@ class TestDangerousFileDownload:
         raw = make_raw(response_body={"detected_type": "text/html"})
         assert dangerous_file_download.analyze(raw)["detected"] is False
 
+    def test_unknown_when_no_material(self):
+        # 확장자도 magic 판독도 없음(응답 자체를 못 받은 경우 등) → 어느 검사도 못 함 → null
+        assert dangerous_file_download.analyze(make_raw())["detected"] is None
+
 
 # ---------- L2-H-07 forced_download ----------
 
@@ -213,8 +266,13 @@ class TestForcedDownload:
         assert signal["detected"] is True
         assert signal["evidence"]["filename"] is None
 
-    def test_no_header(self):
+    def test_no_header_on_received_response(self):
+        # 응답을 받았는데 헤더가 없음 = 일반 웹페이지 → false (검사는 수행됨)
         assert forced_download.analyze(make_raw())["detected"] is False
+
+    def test_unknown_when_no_response(self):
+        # 응답 자체를 못 받았으면 헤더 유무를 관측 못 한 것 → null
+        assert forced_download.analyze(make_unreachable_raw())["detected"] is None
 
 
 # ---------- L2-H-08 http_refresh ----------
@@ -255,5 +313,10 @@ class TestHttpRefresh:
         assert evidence["delay_seconds"] is None
         assert evidence["target_url"] == "http://b.com"
 
-    def test_no_header(self):
+    def test_no_header_on_received_response(self):
+        # 응답을 받았는데 헤더가 없음 = 미관측 → false (검사는 수행됨)
         assert http_refresh.analyze(make_raw())["detected"] is False
+
+    def test_unknown_when_no_response(self):
+        # 응답 자체를 못 받았으면 헤더 유무를 관측 못 한 것 → null
+        assert http_refresh.analyze(make_unreachable_raw())["detected"] is None
