@@ -11,9 +11,10 @@ requires-python = ">=3.13"
 dynamic = ["dependencies"]
 
 [tool.setuptools.dynamic]
-dependencies = { file = ["L3_SCANNER/requirements.txt"] }
+dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools.packages.find]
+where = [".."]
 include = ["L3_SCANNER*"]
 exclude = ["L3_SCANNER.tests*"]
 

@@ -8,7 +8,7 @@
 
 원칙: Raw와 Signal을 구분한다. 수집·파싱 결과는 `raw.html`과 `raw.javascript`에, 명세 조건을 적용한 분석 결과는 `signals[]`에 둔다. Python API는 공통 L3 Result를 반환하고, CLI의 `--output`은 이를 Raw JSON과 Signal JSON 두 파일로 나누어 저장한다.
 
-세부 Signal 정의와 Evidence 계약의 최종 기준은 [`docs/L3_SPEC.md`](../docs/L3_SPEC.md)다.
+세부 Signal 정의와 Evidence 계약의 최종 기준은 [`docs/L3_SPEC.md`](docs/L3_SPEC.md)다.
 
 ## 기술 스택
 
@@ -26,7 +26,7 @@
 | 환경변수 | 현재 없음 |
 | 필요 네트워크 | `scan_url`: DNS와 대상 HTTP 80/HTTPS 443. `scan_content`: 네트워크 불필요 |
 
-`lxml`, `pytest`, Ruff, mypy는 현재 `L3_SCANNER/requirements.txt`에 직접 선언되어 있지 않다. 새 배포·CI 환경에서는 런타임 의존성과 개발 의존성을 별도로 고정해야 한다.
+`lxml`, `pytest`, Ruff, mypy는 현재 `requirements.txt`에 직접 선언되어 있지 않다. 새 배포·CI 환경에서는 런타임 의존성과 개발 의존성을 별도로 고정해야 한다.
 
 ## Signal 범위
 
@@ -52,9 +52,10 @@
 
 ## 실행 방법
 
-저장소 루트에서 Python 3.13 이상 환경을 준비하고 editable package로 설치한다.
+`L3_SCANNER` 디렉터리에서 Python 3.13 이상 환경을 준비하고 editable package로 설치한다.
 
 ```bash
+cd L3_SCANNER
 python -m pip install -e .
 ```
 
