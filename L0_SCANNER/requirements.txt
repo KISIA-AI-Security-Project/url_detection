@@ -1,0 +1,2 @@
+ada-url==4.0.0
+tldextract==5.3.2
