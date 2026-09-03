@@ -1,0 +1,4 @@
+ada-url==4.0.0
+dnspython==2.8.0
+httpx==0.28.1
+publicsuffixlist==1.0.2.20260821

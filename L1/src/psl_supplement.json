@@ -1,0 +1,19 @@
+{
+  "version": "v1.20260826",
+  "active": [
+    {"domain": "000webhostapp.com", "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "weebly.com",        "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "weeblysite.com",    "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "godaddysites.com",  "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "mybluehost.me",     "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "temp.swtest.ru",    "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "co.vu",             "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "codeanyapp.com",    "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "appdomain.cloud",   "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "glitch.me",         "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "tmweb.ru",          "basis": "2026-08-26 수집 데이터 관측", "listed_on": "2026-08-26"},
+    {"domain": "awardspace.com",    "basis": "2026-08-26 브라우저 확인",     "listed_on": "2026-08-26"},
+    {"domain": "freehostia.com",    "basis": "2026-08-26 브라우저 확인",     "listed_on": "2026-08-26"}
+  ],
+  "candidates": []
+}
