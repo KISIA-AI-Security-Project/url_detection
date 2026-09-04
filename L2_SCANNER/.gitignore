@@ -16,5 +16,6 @@ venv/
 # 내부 문서 (GitHub 공개 제외 — 팀 리뷰는 코드 위주)
 docs/
 
-# 스캔 산출물 (Analysis Record 저장 기본 디렉터리 — config/tuning.py RECORD_OUTPUT_DIR)
+# 스캔 산출물 (Analysis Record 저장 기본 디렉터리 — config/tuning.py EVIDENCE_OUTPUT_DIR)
+evidence/
 records/
