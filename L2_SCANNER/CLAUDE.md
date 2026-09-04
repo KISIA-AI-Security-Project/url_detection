@@ -22,7 +22,7 @@ C:\Users\ymseo\anaconda3\envs\L2_scanner\python.exe main.py                     
 
 ## 아키텍처
 
-코드 전체가 `l2_scanner/` 패키지 하나다 (`pyproject.toml`로 설치 — 2026-08-31 패키지 구조 전환, 멘토 지시). 다른 계층은 `from l2_scanner import scan, save_record`만 쓰면 된다. 전체 흐름은 `l2_scanner/scanner.py`의 `scan(url)` 한 함수로 요약된다:
+코드 전체가 `l2_scanner/` 패키지 하나다 (`pyproject.toml`로 설치 — 2026-08-31 패키지 구조 전환, 멘토 지시). 다른 계층은 `from l2_scanner import scan, save_evidence`만 쓰면 된다. 전체 흐름은 `l2_scanner/scanner.py`의 `scan(url)` 한 함수로 요약된다:
 
 ```
 scan(url)
@@ -33,7 +33,7 @@ scan(url)
   → 명세서 10장 형식 JSON 조립
 ```
 
-결과 저장은 `scan()` 밖의 별도 기능이다 — `l2_scanner/storage.py`의 `save_record(result)`가 결과 dict를 JSON 파일로 저장한다(기본 `records/`, 원자적 쓰기·덮어쓰기 금지·실패 시 예외 전파). 분석과 데이터화의 분리(아키텍처 V2 4장)에 따라 scan()에 저장 로직을 넣지 않는다. S3 업로드·job_id 경로 배치는 AWS Job 래퍼 몫.
+결과 저장은 `scan()` 밖의 별도 기능이다 — `l2_scanner/storage.py`의 `save_evidence(result, job_id, attempt_id)`가 결과 dict를 **Raw Evidence 3종**(`raw/{job}/{attempt}/l2/{http,tls,ct}.json`)과 **Analysis Record**(`records/{job}/{attempt}/l2.json`)로 분리 저장한다(2026-08-31 주간회의 결정, L1 `records.py`와 같은 구조). Raw 먼저 쓰고 Record는 마지막(실행 성립의 도장), 원자적 쓰기, 같은 경로 재저장은 FileExistsError로 거부, 실패 시 예외 전파. 경로·순서의 단일 출처는 `files_to_write()`이고 S3판은 `storage_s3.py`(boto3, 배포 전용)가 같은 목록을 소비한다. 분석과 데이터화의 분리(아키텍처 V2 4장)에 따라 scan()에 저장 로직을 넣지 않으며, scan() 반환 dict는 raw를 포함한 통짜 그대로다 — 분리는 저장 계층의 일. job_id/attempt_id는 경로에만 쓰고 JSON 내용에는 넣지 않는다(스키마 팀 확정 대기).
 
 **Collector와 Analyzer의 역할 분리가 핵심 설계다:**
 - **Collector**(`l2_scanner/collectors/`)만 네트워크에 접속한다. 접속은 종류별 1회, 결과는 Raw Data dict.

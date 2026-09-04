@@ -1,8 +1,7 @@
 """로컬 실행용 데모 - 테스트 URL들을 L2 Scanner에 통과시켜 결과 JSON을 출력·저장한다."""
 import json
 
-from l2_scanner import scan
-from l2_scanner.storage import save_record
+from l2_scanner import scan, save_evidence
 
 test_urls = [
     "http://httpbin.org/redirect/3",
@@ -23,5 +22,6 @@ if __name__ == "__main__":
         print("대상:", url)
         result = scan(url)
         print(json.dumps(result, indent=2, ensure_ascii=False))
-        saved = save_record(result)   # Analysis Record 파일 저장 (기본: records/)
-        print("저장:", saved)
+        saved = save_evidence(result)   # Raw, Record 분리 저장 (기본: evidence/, 로컬 폴백 id)
+        for path in saved:
+            print("저장:", path)
