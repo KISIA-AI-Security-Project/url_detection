@@ -20,6 +20,7 @@ X.509 인증서를 한 번 수집한 뒤 notBefore/notAfter/SAN/Subject/Issuer �
 import socket
 import ssl
 from datetime import timezone
+from typing import Any
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -116,7 +117,7 @@ def _handshake(hostname: str, port: int, verify: bool):
             return leaf_der, chain_der, tls.version()
 
 
-def collect(hostname: str, port: int = TLS_DEFAULT_PORT) -> dict:
+def collect(hostname: str | None, port: int = TLS_DEFAULT_PORT) -> dict:
     """호스트 하나의 TLS 인증서를 관측하고 Raw Data 딕셔너리를 반환한다.
 
     입력: hostname (SNI로도 사용), port (기본 443)
@@ -127,7 +128,7 @@ def collect(hostname: str, port: int = TLS_DEFAULT_PORT) -> dict:
     handshake 실패, 검증 실패도 예외를 던지지 않고 관측 결과로 기록한다.
     TLS로 확인 못 함(null)과 정상(valid)을 구분해 남기는 것이 목적.
     """
-    result = {
+    result: dict[str, Any] = {
         "hostname": hostname,
         "port": port,
         "tls_version": None,

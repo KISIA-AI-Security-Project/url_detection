@@ -15,13 +15,13 @@
 | 항목 | 값 |
 | --- | --- |
 | 언어 | Python 3.13 이상 — `pyproject.toml`의 `requires-python = ">=3.13"` |
-| HTTP 수집 | `httpx 0.28.1` + `httpcore 1.0.9` — 수동 Redirect, Streaming 크기 제한, DNS/IP 고정 연결 |
+| HTTP 수집 | 공통 `url-collector` — 수동 Redirect, Streaming 크기 제한, DNS/IP 고정 연결 |
 | HTML 파싱 | `beautifulsoup4 4.13.5`, 코드의 Parser backend는 `lxml` |
 | URL 처리 | Python `urllib.parse` — HTTP(S) 절대 URL 검증과 상대 URL 해석 |
 | 도메인 단위 | `tldextract 5.3.2` — 내장 PSL snapshot 사용, IP literal은 eTLD+1로 만들지 않음 |
 | JavaScript 분석 | `esprima 4.0.1` — ESTree 기반 정적 분석, 제한적 Credential taint/Source-Sink 계보 추적 |
 | 저장 | 내장 저장소 없음. CLI는 표준 출력 또는 `--output`으로 Raw/Signal JSON 두 파일을 기록 |
-| 테스트 | `pytest` — 현재 96개 테스트, Mock Transport/고정 Fixture 사용, 정상 테스트는 실제 네트워크 미사용 |
+| 테스트 | `pytest` — Mock Transport/고정 Fixture 사용, 정상 테스트는 실제 네트워크 미사용 |
 | 정적 검사 | Ruff, mypy 설정(`L3_SCANNER/mypy.ini`) — 개발 도구 버전은 프로젝트 의존성에 고정되어 있지 않음 |
 | 환경변수 | 현재 없음 |
 | 필요 네트워크 | `scan_url`: DNS와 대상 HTTP 80/HTTPS 443. `scan_content`: 네트워크 불필요 |
@@ -29,6 +29,10 @@
 `lxml`, `pytest`, Ruff, mypy는 현재 `requirements.txt`에 직접 선언되어 있지 않다. 새 배포·CI 환경에서는 런타임 의존성과 개발 의존성을 별도로 고정해야 한다.
 
 ## Signal 범위
+
+각 항목의 `true`/`false`/`null`/`not_applicable` 조건과 실제 정적 분석 범위는
+[`docs/L3_DETECTION_CRITERIA.md`](docs/L3_DETECTION_CRITERIA.md)에서 빠르게 확인할 수
+있고, 상세 Evidence 계약의 최종 기준은 [`docs/L3_SPEC.md`](docs/L3_SPEC.md)다.
 
 | ID | Signal | 관측 대상 |
 | --- | --- | --- |
@@ -56,6 +60,7 @@
 
 ```bash
 cd L3_SCANNER
+python -m pip install -e ../url_collector
 python -m pip install -e .
 ```
 

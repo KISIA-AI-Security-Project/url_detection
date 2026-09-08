@@ -1,4 +1,4 @@
-# ---- HTTP Collector (collectors/http_collector.py) ----
+# ---- 공통 URL Collector에 전달하는 L2 독립 실행 프로필 ----
 
 MAX_REDIRECT_HOPS = 15         # 따라가는 최대 리다이렉트 횟수. 초과 hop은 관측만 하고 접속하지 않는다
 HTTP_TIMEOUT_SECONDS = 10.0    # 연결, 읽기 타임아웃 (초)

@@ -1,4 +1,5 @@
 # Runtime dependencies (Python 3.13)
+url-collector==0.1.0
 httpx==0.28.1
 httpcore==1.0.9
 beautifulsoup4==4.13.5

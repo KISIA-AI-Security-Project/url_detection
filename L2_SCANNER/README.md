@@ -1,7 +1,7 @@
 # L2 Scanner
 
 악성 URL 분석 파이프라인의 L2(응답, 통신 분석) 계층.
-대상 URL에 접속해 **HTTP 통신과 리다이렉트 여정을 관측**하고, 수집한 Raw Data를 여러 Analyzer가 공유해 Signal을 생성한다.
+공통 URL Collector가 만든 동일 응답 `PageSnapshot`에서 **HTTP 통신과 리다이렉트 여정을 관측**하고, 변환한 Raw Data를 여러 Analyzer가 공유해 Signal을 생성한다.
 
 - 원칙: **관측 ≠ 판정** (`detected`는 패턴 관측 여부, 악성 판정은 Rule Engine/LLM의 몫), **"확인 안 됨" ≠ "없음"** (unknown은 null), **접속은 1회, 분석은 공유**
 
@@ -22,7 +22,10 @@
 ## 실행 방법
 
 ```powershell
-# 패키지 설치 (개발 모드 — 의존성 포함, 어디서든 import l2_scanner 가능)
+# 저장소 루트에서 공통 Collector를 먼저 설치
+pip install -e ../url_collector
+
+# L2 패키지 설치
 pip install -e .
 
 # 데모 실행 (테스트 URL 목록을 스캔해 결과 JSON 출력 + records/에 저장)
@@ -32,10 +35,10 @@ python main.py
 python -m pytest tests -q
 ```
 
-코드에서 사용 (L3·공통 Collector·Fargate Job 등 다른 계층):
+코드에서 사용 (통합 Scanner·Fargate Job 등 상위 계층):
 
 ```python
-from l2_scanner import scan, save_record
+from l2_scanner import scan, scan_snapshot, save_record
 
 result = scan("https://example.com")   # 명세서 10장 형식 dict
 path = save_record(result)             # Analysis Record JSON 파일 저장 (기본 records/)
@@ -46,13 +49,14 @@ path = save_record(result)             # Analysis Record JSON 파일 저장 (기
 ```
 pyproject.toml           # 패키지 설치 명세 (pip install -e . - 상대경로 import 없이 어디서든 동작)
 main.py                  # 로컬 데모 (테스트 URL 목록 - badssl 인증서 이상 케이스 포함)
-l2_scanner/              # 패키지 본체 - 공개 진입점은 scan()·save_record() 둘뿐
+l2_scanner/              # 패키지 본체
   scanner.py                # 진입점: HTTP+TLS 수집 각 1회 → Analyzer 14종 실행 → 명세서 10장 형식 결과 조립
   storage.py                # Analysis Record 파일 저장 (원자적 쓰기, 덮어쓰기 금지 - S3 업로드는 AWS Job 래퍼 몫)
   collectors/
-    http_collector.py         # HTTP Collector - 리다이렉트 hop 추적, 헤더, 바디 수집
     certificate_collector.py  # Certificate Collector - TLS handshake, 인증서, 체인 수집, 파싱
     ct_collector.py           # CT Collector - CT 최초 관측 시각 (내장 SCT 우선, crt.sh 폴백)
+  adapters/
+    page_snapshot.py          # 공통 PageSnapshot → 기존 L2 HTTP Raw 계약
   analyzers/header/        # Header Analyzer 8종: L2-H-01 리다이렉션 체인 / 02 도메인 변경 / 03 IP 리다이렉트
                            #   / 04 단축 URL / 05 Content-Type 불일치 / 06 위험 파일 / 07 강제 다운로드 / 08 HTTP Refresh
   analyzers/certificate/   # Certificate Analyzer 6종: L2-C-01 발급 기간 / 02 유효성 / 03 도메인 일치
@@ -62,7 +66,7 @@ l2_scanner/              # 패키지 본체 - 공개 진입점은 scan()·save_r
   config/
     tuning.py              # 운영 조정값 (타임아웃, 상한, 저장 디렉터리)
     knowledge.py           # 지식 데이터 (위험 확장자, 단축 도메인 명단, fresh 기준일)
-tests/                   # 단위 테스트 130건 (가짜 Raw Data 주입 - 네트워크 없음)
+tests/                   # 단위 테스트 (가짜 Raw Data·PageSnapshot 주입 - 네트워크 없음)
 ```
 
 ## Collector 안전장치 (상수, `l2_scanner/config/tuning.py`)
@@ -73,7 +77,5 @@ tests/                   # 단위 테스트 130건 (가짜 Raw Data 주입 - 네
 | `HTTP_TIMEOUT_SECONDS` | 10.0 | 무응답 서버 대비 |
 | `MAX_BODY_BYTES` | 5MB | 초대형 응답의 메모리 고갈 방지 (잘리면 `response_body.truncated=true`, sha256은 null) |
 | `USER_AGENT` | Chrome UA | 봇 클로킹으로 인한 관측 왜곡 방지 (최종 값은 팀 협의 대상) |
-| SSRF 게이트 | — | 내부망·예약 주소(사설 IP, 169.254.169.254 등)로의 리다이렉트는 접속하지 않고 `errors[]`에 정책 차단으로 기록 |
-
-
+| SSRF 게이트 | — | 최초 URL과 모든 Redirect 목적지의 내부망·예약 주소를 차단하고 DNS 검증 IP로 연결을 고정 |
 

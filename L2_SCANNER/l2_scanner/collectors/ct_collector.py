@@ -27,6 +27,7 @@ GET https://crt.sh/?q=<sha256 fingerprint>&output=json
 """
 import json
 from datetime import datetime, timezone
+from typing import Any
 
 import httpx
 
@@ -51,7 +52,7 @@ def collect(fingerprint: str | None, sct_timestamps: list[str] | None = None) ->
     인증서 자체를 못 본 경우(fingerprint None)는 조회 없이 unknown 구조만 반환한다 -
     실패 사유는 이미 TLS errors에 있다.
     """
-    result = {
+    result: dict[str, Any] = {
         "fingerprint": fingerprint,
         "first_seen": None,      # 최초 관측 시각 (확인 못 했으면 null)
         "source": None,          # 어디서 관측했나 - "embedded_sct" | "crt.sh" | null

@@ -14,6 +14,7 @@ description = "악성 URL 분석 파이프라인의 L2(응답·통신 분석) �
 requires-python = ">=3.11"
 # 버전은 requirements.txt와 같은 값을 유지한다 (두 곳이 어긋나면 requirements.txt 기준으로 맞출 것)
 dependencies = [
+    "url-collector==0.1.0",
     "httpx==0.28.1",
     "tldextract==5.3.2",
     "cryptography==50.0.0",
@@ -26,3 +27,6 @@ dev = ["pytest==9.1.1"]
 
 [tool.setuptools.packages.find]
 include = ["l2_scanner*"]
+
+[tool.setuptools.package-data]
+l2_scanner = ["py.typed"]

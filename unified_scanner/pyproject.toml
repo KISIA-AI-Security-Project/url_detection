@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unified-url-scanner"
+version = "0.1.0"
+description = "Single-snapshot L2/L3 URL scanner orchestrator"
+requires-python = ">=3.13"
+dependencies = [
+    "url-collector==0.1.0",
+    "l2-scanner==1.0.0",
+    "l3-scanner==0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+include = ["unified_scanner*"]

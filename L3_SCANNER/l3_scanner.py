@@ -11,9 +11,16 @@ from copy import deepcopy
 from datetime import datetime
 from typing import Any, Mapping
 
+from url_collector import PageSnapshot, collect_url
+
+from L3_SCANNER.adapters import (
+    apply_script_snapshot,
+    page_collection_policy,
+    script_collection_policy,
+    to_l3_input,
+)
 from L3_SCANNER.analyzers.html.runner import analyze_html
 from L3_SCANNER.analyzers.javascript.runner import analyze_javascript
-from L3_SCANNER.collectors import collect_external_script, collect_page
 from L3_SCANNER.models.input import L3Input, ScriptInput
 from L3_SCANNER.parsers.html_parser import parse_html
 from L3_SCANNER.parsers.javascript_parser import parse_javascript
@@ -81,6 +88,14 @@ def _mark_external_script_limit(script: ScriptInput, limit: int) -> None:
     )
 
 
+def _fetch_external_script(script: ScriptInput, runtime: RuntimeConfig) -> ScriptInput:
+    """명시적으로 허용된 외부 Script를 공통 HTTP 클라이언트로 제한 수집한다."""
+    if script.type != "external" or not script.source_url:
+        return script
+    snapshot = collect_url(script.source_url, script_collection_policy(runtime))
+    return apply_script_snapshot(script, snapshot)
+
+
 def _prepare_scripts(
     scan_input: L3Input,
     html_raw: Mapping[str, Any],
@@ -111,7 +126,7 @@ def _prepare_scripts(
     ]
     fetch_limit = max(runtime.max_external_scripts, 0)
     for script in candidates[:fetch_limit]:
-        collect_external_script(script, runtime)
+        _fetch_external_script(script, runtime)
     for script in candidates[fetch_limit:]:
         _mark_external_script_limit(script, runtime.max_external_scripts)
     return scripts
@@ -251,9 +266,12 @@ class L3Scanner:
 
     def scan_url(self, url: str) -> dict[str, Any]:
         """URL을 안전 제한 아래 수집한 뒤 ``scan_content``의 동일 경로로 분석한다."""
-        return self._scan_content(
-            collect_page(url, self.runtime), fetch_external_sources=True
-        )
+        snapshot = collect_url(url, page_collection_policy(self.runtime))
+        return self.scan_snapshot(snapshot)
+
+    def scan_snapshot(self, snapshot: PageSnapshot) -> dict[str, Any]:
+        """이미 수집된 페이지를 재요청하지 않고 L3 공통 분석 경로로 처리한다."""
+        return self._scan_content(to_l3_input(snapshot), fetch_external_sources=True)
 
 
 def scan_content(

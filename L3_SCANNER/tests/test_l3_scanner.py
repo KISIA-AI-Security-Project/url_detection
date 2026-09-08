@@ -7,6 +7,8 @@ from L3_SCANNER.l3_scanner import L3Scanner, scan_content
 from L3_SCANNER.models.input import HTMLInput, L3Input, ScriptInput
 from L3_SCANNER.policies.detection import DetectionPolicy
 from L3_SCANNER.policies.runtime import RuntimeConfig
+from url_collector.models import PageSnapshot
+from url_collector.policy import CollectionPolicy
 
 
 def complete_policy() -> DetectionPolicy:
@@ -112,7 +114,7 @@ def test_scan_content_never_fetches_external_scripts(monkeypatch: Any) -> None:
         calls.append(script.source_url)
         return script
 
-    monkeypatch.setattr(scanner_module, "collect_external_script", fake_collect)
+    monkeypatch.setattr(scanner_module, "_fetch_external_script", fake_collect)
     result = L3Scanner(runtime=RuntimeConfig(fetch_external_scripts=True)).scan_content(
         L3Input(
             "https://example.com",
@@ -138,21 +140,26 @@ def test_scan_url_may_fetch_external_scripts_when_policy_is_enabled(
     monkeypatch: Any,
 ) -> None:
     calls: list[str | None] = []
-    collected = L3Input(
-        "https://example.com",
-        "https://example.com",
-        HTMLInput("<html></html>", content_type="text/html"),
-        scripts=[
-            ScriptInput(
-                "script-1",
-                "external",
-                source_url="https://cdn.example/app.js",
-            )
-        ],
+    collected = PageSnapshot(
+        snapshot_id="snapshot-1",
+        collected_at="2026-09-03T00:00:00+09:00",
+        original_url="https://example.com",
+        current_url="https://example.com",
+        final_url="https://example.com",
+        status_code=200,
+        response_headers=(("content-type", "text/html"),),
+        body=b'<html><script src="https://cdn.example/app.js"></script></html>',
+        captured_body_sha256="captured",
+        content_type="text/html",
+        encoding="utf-8",
+        truncated=False,
+        redirect_chain=(),
+        collection_errors=(),
+        request_profile=CollectionPolicy(10.0, 5, 2_000_000, "test"),
     )
 
-    def fake_collect_page(url: str, runtime: RuntimeConfig) -> L3Input:
-        del url, runtime
+    def fake_collect_page(url: str, policy: CollectionPolicy) -> PageSnapshot:
+        del url, policy
         return collected
 
     def fake_collect_script(script: ScriptInput, runtime: RuntimeConfig) -> ScriptInput:
@@ -161,8 +168,8 @@ def test_scan_url_may_fetch_external_scripts_when_policy_is_enabled(
         script.source = "const value = 1;"
         return script
 
-    monkeypatch.setattr(scanner_module, "collect_page", fake_collect_page)
-    monkeypatch.setattr(scanner_module, "collect_external_script", fake_collect_script)
+    monkeypatch.setattr(scanner_module, "collect_url", fake_collect_page)
+    monkeypatch.setattr(scanner_module, "_fetch_external_script", fake_collect_script)
 
     result = L3Scanner(runtime=RuntimeConfig(fetch_external_scripts=True)).scan_url(
         "https://example.com"

@@ -28,6 +28,8 @@ def _timestamp_utc(result: dict) -> str:
     파일명은 색인용일 뿐, 정본 시각은 결과 JSON 안의 scan 트리에 있다.
     """
     finished_at = (result.get("scan") or {}).get("finished_at")
+    if not isinstance(finished_at, str):
+        finished_at = ""
     try:
         dt = datetime.fromisoformat(finished_at)
     except (TypeError, ValueError):

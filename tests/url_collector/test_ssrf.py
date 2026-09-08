@@ -3,14 +3,16 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import httpcore
+import pytest
 
-from L3_SCANNER.collectors.http_client import (
+from url_collector.ssrf import (
+    PinnedNetworkBackend,
     ResolvedTarget,
-    _PinnedNetworkBackend,
+    resolve_public_http_url,
 )
 
 
-class _DummyStream(httpcore.NetworkStream):
+class DummyStream(httpcore.NetworkStream):
     def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
         del max_bytes, timeout
         return b""
@@ -31,7 +33,7 @@ class _DummyStream(httpcore.NetworkStream):
         return self
 
 
-class _RecordingBackend(httpcore.NetworkBackend):
+class RecordingBackend(httpcore.NetworkBackend):
     def __init__(self) -> None:
         self.connected_host: str | None = None
 
@@ -45,7 +47,7 @@ class _RecordingBackend(httpcore.NetworkBackend):
     ) -> httpcore.NetworkStream:
         del port, timeout, local_address, socket_options
         self.connected_host = host
-        return _DummyStream()
+        return DummyStream()
 
     def connect_unix_socket(
         self,
@@ -54,16 +56,29 @@ class _RecordingBackend(httpcore.NetworkBackend):
         socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
     ) -> httpcore.NetworkStream:
         del path, timeout, socket_options
-        raise AssertionError("Unix socket must not be used")
+        raise AssertionError("Unix sockets must not be used")
 
 
-def test_pinned_backend_connects_to_validated_ip_without_dns_lookup() -> None:
-    recording = _RecordingBackend()
-    backend = _PinnedNetworkBackend(
-        ResolvedTarget("example.com", 443, ("93.184.216.34",)),
-        recording,
+def test_pinned_backend_connects_to_validated_ip() -> None:
+    recording = RecordingBackend()
+    backend = PinnedNetworkBackend(
+        ResolvedTarget("example.com", 443, ("93.184.216.34",)), recording
     )
 
     backend.connect_tcp("example.com", 443)
 
     assert recording.connected_host == "93.184.216.34"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "file:///etc/passwd",
+        "javascript:alert(1)",
+        "https://user:password@example.com/",
+        "not-a-url",
+    ],
+)
+def test_rejects_non_http_or_ambiguous_urls(url: str) -> None:
+    with pytest.raises(ValueError):
+        resolve_public_http_url(url, lambda hostname, port: ["93.184.216.34"])

@@ -2,18 +2,26 @@
 
 [처리 흐름]
     scan(url)
-      1. HTTP Collector가 접속 1회로 HTTP Raw Data 수집  (collectors/http_collector.py)
+      1. 공통 URL Collector가 PageSnapshot을 1회 수집하고 Adapter가 L2 Raw로 변환
       2. Certificate Collector가 TLS handshake 1회로 인증서 수집 (collectors/certificate_collector.py) - 대상 호스트는 HTTPS URL(최종 도착 우선, 없으면 원본)에서 결정
       3. CT Collector가 CT 최초 관측 시각 수집 (collectors/ct_collector.py) - 내장 SCT 우선(접속 없음), SCT 없는 인증서만 crt.sh 폴백 조회
       4. Header Analyzer 8종 + Certificate Analyzer 6종이 Raw Data를 공유해 Signal 생성 (Analyzer는 네트워크 재접속 없음. C-06만 CT Raw Data를 읽는다)
       5. JSON(dict)으로 조립해 반환
 
+    scan_snapshot(snapshot)
+      통합 Scanner가 이미 수집한 같은 PageSnapshot을 사용하며 HTTP를 재요청하지 않는다.
+
 """
 from datetime import datetime
 from urllib.parse import urlsplit
 
-from l2_scanner.collectors.http_collector import collect
-from l2_scanner.collectors.certificate_collector import collect as collect_certificate, TLS_DEFAULT_PORT
+from url_collector import CollectionPolicy, PageSnapshot, collect_url
+
+from l2_scanner.adapters import to_l2_http_raw
+from l2_scanner.collectors.certificate_collector import (
+    TLS_DEFAULT_PORT,
+    collect as collect_certificate,
+)
 from l2_scanner.collectors.ct_collector import collect as collect_ct
 from l2_scanner.analyzers.header import (
     redirect_chain,
@@ -34,6 +42,12 @@ from l2_scanner.analyzers.certificate import (
     ct_first_seen,
 )
 from l2_scanner.utils.http_parsing import etld1
+from l2_scanner.config.tuning import (
+    HTTP_TIMEOUT_SECONDS,
+    MAX_BODY_BYTES,
+    MAX_REDIRECT_HOPS,
+    USER_AGENT,
+)
 
 SCHEMA_VERSION = "1.0"
 
@@ -101,12 +115,20 @@ def _tls_target(raw_http: dict) -> tuple[str | None, int]:
     return None, TLS_DEFAULT_PORT
 
 
-def scan(url: str) -> dict:
-    """URL 하나를 관측, 분석하고 L2 결과를 반환한다."""
-    started_at = _now_iso()
+def collection_policy() -> CollectionPolicy:
+    """기존 L2 수집 제한을 공통 Collector의 명시적 프로필로 변환한다."""
+    return CollectionPolicy(
+        request_timeout_seconds=HTTP_TIMEOUT_SECONDS,
+        max_redirects=MAX_REDIRECT_HOPS,
+        max_body_bytes=MAX_BODY_BYTES,
+        user_agent=USER_AGENT,
+    )
 
-    # 1. HTTP 수집 (접속 1회)
-    raw_http = collect(url)
+
+def scan_snapshot(snapshot: PageSnapshot, *, started_at: str | None = None) -> dict:
+    """이미 수집된 동일 페이지 스냅샷을 재요청 없이 L2로 분석한다."""
+    started_at = started_at or _now_iso()
+    raw_http = to_l2_http_raw(snapshot)
 
     # 2. TLS 인증서 수집 (handshake 1회) - HTTPS 대상이 없으면 unknown 구조로 남는다
     tls_host, tls_port = _tls_target(raw_http)
@@ -184,3 +206,10 @@ def scan(url: str) -> dict:
         # HTTP, TLS, CT 세 곳의 실패, 차단 기록 + Analyzer 실행 실패 기록을 합쳐 보존
         "errors": raw_http["errors"] + raw_tls["errors"] + raw_ct["errors"] + analyzer_errors,
     }
+
+
+def scan(url: str) -> dict:
+    """URL을 공통 Collector로 한 번 수집한 뒤 L2 분석을 실행한다."""
+    started_at = _now_iso()
+    snapshot = collect_url(url, collection_policy())
+    return scan_snapshot(snapshot, started_at=started_at)
