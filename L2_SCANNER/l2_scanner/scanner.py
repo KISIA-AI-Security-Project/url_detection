@@ -5,7 +5,7 @@
       1. HTTP Collector가 접속 1회로 HTTP Raw Data 수집  (collectors/http_collector.py)
       2. Certificate Collector가 TLS handshake 1회로 인증서 수집 (collectors/certificate_collector.py) - 대상 호스트는 HTTPS URL(최종 도착 우선, 없으면 원본)에서 결정
       3. CT Collector가 CT 최초 관측 시각 수집 (collectors/ct_collector.py) - 내장 SCT 우선(접속 없음), SCT 없는 인증서만 crt.sh 폴백 조회
-      4. Header Analyzer 8종 + Certificate Analyzer 6종이 Raw Data를 공유해 Signal 생성 (Analyzer는 네트워크 재접속 없음. C-06만 CT Raw Data를 읽는다)
+      4. Header Analyzer 9종 + Certificate Analyzer 8종이 Raw Data를 공유해 Signal 생성 (Analyzer는 네트워크 재접속 없음. C-06만 CT Raw Data를 읽는다)
       5. JSON(dict)으로 조립해 반환
 
 """
@@ -24,6 +24,7 @@ from l2_scanner.analyzers.header import (
     forced_download,
     content_type_mismatch,
     dangerous_file_download,
+    protocol_downgrade,
 )
 from l2_scanner.analyzers.certificate import (
     certificate_age,
@@ -32,6 +33,8 @@ from l2_scanner.analyzers.certificate import (
     self_signed,
     certificate_chain,
     ct_first_seen,
+    tls_version,
+    wildcard_certificate,
 )
 from l2_scanner.utils.http_parsing import etld1
 
@@ -47,15 +50,23 @@ HEADER_ANALYZERS = [
     dangerous_file_download,  # L2-H-06
     forced_download,          # L2-H-07
     http_refresh,             # L2-H-08
+    protocol_downgrade,       # L2-H-09 (명세서 5장 추가 구현)
 ]
 
 # C-06(ct_first_seen)은 이 목록에 없다 - TLS가 아닌 CT Raw Data를 읽으므로 scan()에서 따로 호출
 CERTIFICATE_ANALYZERS = [
-    certificate_age,
-    certificate_validity,
-    hostname_match,
-    self_signed,
-    certificate_chain,
+    certificate_age,          # L2-C-01
+    certificate_validity,     # L2-C-02
+    hostname_match,           # L2-C-03
+    self_signed,              # L2-C-04
+    certificate_chain,        # L2-C-05
+]
+
+# 명세서 5장 추가 구현분 (TLS Raw를 읽는다). C-06 뒤 번호라 별도 목록으로 두고
+# scan()에서 C-06 다음에 실행한다 - signals[]가 기능 번호 순서를 유지하도록
+CERTIFICATE_ANALYZERS_EXTENDED = [
+    tls_version,              # L2-C-07
+    wildcard_certificate,     # L2-C-08
 ]
 
 
@@ -125,6 +136,7 @@ def scan(url: str) -> dict:
     signals = [_run_analyzer(a, raw_http, analyzer_errors) for a in HEADER_ANALYZERS]
     signals += [_run_analyzer(a, raw_tls, analyzer_errors) for a in CERTIFICATE_ANALYZERS]
     signals += [_run_analyzer(ct_first_seen, raw_ct, analyzer_errors)]   # C-06만 CT Raw Data를 읽는다
+    signals += [_run_analyzer(a, raw_tls, analyzer_errors) for a in CERTIFICATE_ANALYZERS_EXTENDED]
 
     finished_at = _now_iso()
 

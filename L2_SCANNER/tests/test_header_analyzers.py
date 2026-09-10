@@ -1,4 +1,4 @@
-"""Header Analyzer 8종 단위 테스트 — 가짜 Raw Data 주입, 네트워크 없음."""
+"""Header Analyzer 9종 단위 테스트 — 가짜 Raw Data 주입, 네트워크 없음."""
 from l2_scanner.analyzers.header import (
     redirect_chain,
     redirect_domain_change,
@@ -8,6 +8,7 @@ from l2_scanner.analyzers.header import (
     forced_download,
     content_type_mismatch,
     dangerous_file_download,
+    protocol_downgrade,
 )
 
 
@@ -320,3 +321,56 @@ class TestHttpRefresh:
     def test_unknown_when_no_response(self):
         # 응답 자체를 못 받았으면 헤더 유무를 관측 못 한 것 → null
         assert http_refresh.analyze(make_unreachable_raw())["detected"] is None
+
+
+# ---------- L2-H-09 protocol_downgrade ----------
+
+class TestProtocolDowngrade:
+    def test_downgrade_detected(self):
+        raw = make_raw(
+            original_url="https://a.com",
+            redirect_chain=[hop("https://a.com", "http://b.com")],
+            final_url="http://b.com",
+        )
+        signal = protocol_downgrade.analyze(raw)
+        assert signal["detected"] is True
+        assert signal["evidence"]["downgrade_count"] == 1
+        assert signal["evidence"]["source_url"] == "https://a.com"
+        assert signal["evidence"]["destination_url"] == "http://b.com"
+
+    def test_upgrade_only_is_not_detected(self):
+        # HTTP -> HTTPS 업그레이드는 정상 표준 동작 - detected 대상이 아니고 보조 관측만
+        raw = make_raw(
+            redirect_chain=[hop("http://a.com", "https://a.com")],
+            final_url="https://a.com",
+        )
+        signal = protocol_downgrade.analyze(raw)
+        assert signal["detected"] is False
+        assert signal["evidence"]["upgrade_count"] == 1
+        assert signal["evidence"]["downgrade_count"] == 0
+
+    def test_no_redirect_is_false(self):
+        # 여정은 관측했고 전환 없음 -> false (검사했고 미관측)
+        assert protocol_downgrade.analyze(make_raw())["detected"] is False
+
+    def test_unknown_when_nothing_observed(self):
+        # 첫 접속부터 실패 = 여정 자체를 관측 못 함 -> 판정 불가(null), false 아님
+        assert protocol_downgrade.analyze(make_unreachable_raw())["detected"] is None
+
+    def test_hops_observed_before_failure_still_detected(self):
+        # 강등 hop을 관측한 뒤 실패해도 관측으로는 판정 가능
+        raw = make_unreachable_raw(redirect_chain=[hop("https://a.com", "http://b.com")])
+        assert protocol_downgrade.analyze(raw)["detected"] is True
+
+    def test_multiple_downgrades_counted_first_in_evidence(self):
+        raw = make_raw(
+            redirect_chain=[
+                hop("https://a.com", "http://b.com"),
+                hop("http://b.com", "https://c.com"),
+                hop("https://c.com", "http://d.com"),
+            ],
+            final_url="http://d.com",
+        )
+        signal = protocol_downgrade.analyze(raw)
+        assert signal["evidence"]["downgrade_count"] == 2
+        assert signal["evidence"]["source_url"] == "https://a.com"   # 첫 강등 hop 기준

@@ -1,4 +1,4 @@
-"""Certificate Analyzer 6종 단위 테스트 — 가짜 TLS, CT Raw Data 주입, 네트워크 없음."""
+"""Certificate Analyzer 8종 단위 테스트 — 가짜 TLS, CT Raw Data 주입, 네트워크 없음."""
 from datetime import datetime, timedelta, timezone
 
 from l2_scanner.analyzers.certificate import (
@@ -8,6 +8,8 @@ from l2_scanner.analyzers.certificate import (
     self_signed,
     certificate_chain,
     ct_first_seen,
+    tls_version,
+    wildcard_certificate,
 )
 
 
@@ -271,3 +273,56 @@ class TestCtFirstSeen:
         signal = ct_first_seen.analyze(make_ct(first_seen=days_later(3)))
         assert signal["detected"] is False
         assert signal["evidence"]["fresh"] is False
+
+
+# ---------- L2-C-07 tls_version ----------
+
+class TestTlsVersion:
+    def test_modern_version_is_false(self):
+        signal = tls_version.analyze(make_tls())   # 기본값 TLSv1.3
+        assert signal["detected"] is False
+        assert signal["evidence"] == {"tls_version": "TLSv1.3", "legacy": False}
+
+    def test_legacy_versions_detected(self):
+        # RFC 8996 폐기 대상 (1.1 이하) 전부 true
+        for version in ("SSLv3", "TLSv1", "TLSv1.1"):
+            signal = tls_version.analyze(make_tls(tls_version=version))
+            assert signal["detected"] is True, version
+            assert signal["evidence"]["tls_version"] == version
+
+    def test_tls12_is_not_legacy(self):
+        assert tls_version.analyze(make_tls(tls_version="TLSv1.2"))["detected"] is False
+
+    def test_unknown_when_no_handshake(self):
+        # handshake 실패 = 버전 확인 불가 -> null (확인 안 됨 != 최신)
+        signal = tls_version.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"tls_version": None, "legacy": None}
+
+
+# ---------- L2-C-08 wildcard_certificate ----------
+
+class TestWildcardCertificate:
+    def test_no_wildcard_is_false(self):
+        signal = wildcard_certificate.analyze(make_tls())   # 기본 SAN 2개, 와일드카드 없음
+        assert signal["detected"] is False
+        assert signal["evidence"] == {"wildcard_names": [], "san_count": 2}
+
+    def test_wildcard_detected(self):
+        tls = make_tls(leaf_certificate={"san": ["*.example.com", "example.com"]})
+        signal = wildcard_certificate.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["wildcard_names"] == ["*.example.com"]
+        assert signal["evidence"]["san_count"] == 2
+
+    def test_empty_san_is_false(self):
+        # 인증서는 봤는데 SAN이 비어 있음 -> 검사했고 와일드카드 미관측 = false
+        signal = wildcard_certificate.analyze(make_tls(leaf_certificate={"san": []}))
+        assert signal["detected"] is False
+        assert signal["evidence"]["san_count"] == 0
+
+    def test_unknown_when_no_certificate(self):
+        # 인증서를 못 봤으면 판정 불가 -> null (확인 안 됨 != 와일드카드 없음)
+        signal = wildcard_certificate.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"wildcard_names": [], "san_count": None}
