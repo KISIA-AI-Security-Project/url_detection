@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-악성 URL 분석 파이프라인의 **L2(응답, 통신 분석) 계층**. URL에 접속해 HTTP 통신, 리다이렉트, TLS 인증서를 관측하고, 통합 명세서 10장 형식의 결과 JSON을 반환한다. KISIA 팀 프로젝트의 한 계층이며 통합 명세서와 L2 기능 DB(L2-H-01~08, L2-C-01~06)가 최종 근거 문서다 — 출력 형식, 기능 범위를 바꿀 때는 명세서와 대조할 것.
+악성 URL 분석 파이프라인의 **L2(응답, 통신 분석) 계층**. URL에 접속해 HTTP 통신, 리다이렉트, TLS 인증서를 관측하고, 통합 명세서 10장 형식의 결과 JSON을 반환한다. KISIA 팀 프로젝트의 한 계층이며 통합 명세서와 L2 기능 DB(L2-H-01~09, L2-C-01~08 — H-09·C-07·C-08은 명세서 5장 추가 구현분, 노션 DB 채번 등록 필요)가 최종 근거 문서다 — 출력 형식, 기능 범위를 바꿀 때는 명세서와 대조할 것.
 
 ## 명령어
 
@@ -29,7 +29,7 @@ scan(url)
   → HTTP Collector (접속 1회: 리다이렉트 hop·헤더·바디)
   → Certificate Collector (TLS handshake 1회 — HTTPS 대상 있을 때만)
   → CT Collector (내장 SCT 우선, 없으면 crt.sh 폴백)
-  → Analyzer 14종이 Raw Data를 공유해 Signal 생성 (재접속 없음)
+  → Analyzer 17종이 Raw Data를 공유해 Signal 생성 (재접속 없음)
   → 명세서 10장 형식 JSON 조립
 ```
 

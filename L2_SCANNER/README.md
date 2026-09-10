@@ -47,7 +47,7 @@ path = save_record(result)             # Analysis Record JSON 파일 저장 (기
 pyproject.toml           # 패키지 설치 명세 (pip install -e . - 상대경로 import 없이 어디서든 동작)
 main.py                  # 로컬 데모 (테스트 URL 목록 - badssl 인증서 이상 케이스 포함)
 l2_scanner/              # 패키지 본체 - 공개 진입점은 scan()·save_record() 둘뿐
-  scanner.py                # 진입점: HTTP+TLS 수집 각 1회 → Analyzer 14종 실행 → 명세서 10장 형식 결과 조립
+  scanner.py                # 진입점: HTTP+TLS 수집 각 1회 → Analyzer 17종 실행 → 명세서 10장 형식 결과 조립
   storage.py                # Analysis Record 파일 저장 (원자적 쓰기, 덮어쓰기 금지 - S3 업로드는 AWS Job 래퍼 몫)
   collectors/
     http_collector.py         # HTTP Collector - 리다이렉트 hop 추적, 헤더, 바디 수집
