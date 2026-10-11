@@ -50,10 +50,18 @@ def collect_external_script(
             transport=transport,
         )
     except (httpx.HTTPError, ValueError, OSError) as exc:
-        code=('script_request_timeout' if isinstance(exc,httpx.TimeoutException) else
-              'script_dns_resolution_failed' if 'DNS resolution' in str(exc) else
-              'script_target_policy_blocked' if 'non-public address' in str(exc) or 'user information is not allowed' in str(exc) else
-              'script_invalid_target' if isinstance(exc,ValueError) else 'script_connection_failed')
+        code = (
+            "script_request_timeout"
+            if isinstance(exc, httpx.TimeoutException)
+            else "script_dns_resolution_failed"
+            if "DNS resolution" in str(exc)
+            else "script_target_policy_blocked"
+            if "non-public address" in str(exc)
+            or "user information is not allowed" in str(exc)
+            else "script_invalid_target"
+            if isinstance(exc, ValueError)
+            else "script_connection_failed"
+        )
         script.collection_errors.append(
             collection_error(
                 "script_collection",
@@ -65,15 +73,24 @@ def collect_external_script(
         )
         return script
 
-    script.response={'url':response.url,'status_code':response.status_code,'headers':response.headers,
-                     'received_bytes':len(response.body),'captured_sha256':sha256(response.body).hexdigest(),
-                     'body_complete':not response.truncated}
+    script.response = {
+        "url": response.url,
+        "status_code": response.status_code,
+        "headers": response.headers,
+        "received_bytes": len(response.body),
+        "captured_sha256": sha256(response.body).hexdigest(),
+        "body_complete": not response.truncated,
+    }
     script.collection_errors.extend(response.errors)
-    if response.status_code>=400:
-        script.response['captured_bytes_base64']=base64.b64encode(response.body).decode('ascii')
+    if response.status_code >= 400:
+        script.response["captured_bytes_base64"] = base64.b64encode(
+            response.body
+        ).decode("ascii")
         return script
     if response.content_type not in _JAVASCRIPT_CONTENT_TYPES:
-        script.response['captured_bytes_base64']=base64.b64encode(response.body).decode('ascii')
+        script.response["captured_bytes_base64"] = base64.b64encode(
+            response.body
+        ).decode("ascii")
         script.collection_errors.append(
             collection_error(
                 "script_collection",
@@ -84,11 +101,17 @@ def collect_external_script(
         )
         return script
 
-    source,encoding,encoding_source,errors=decode_html(response.body,response.encoding,allow_html_meta=False)
-    script.response.update(encoding=encoding,encoding_source=encoding_source)
+    source, encoding, encoding_source, errors = decode_html(
+        response.body, response.encoding, allow_html_meta=False
+    )
+    script.response.update(encoding=encoding, encoding_source=encoding_source)
     if errors:
-        script.response['captured_bytes_base64']=base64.b64encode(response.body).decode('ascii')
-        script.collection_errors.extend({'stage':'script_decoding',**error} for error in errors)
+        script.response["captured_bytes_base64"] = base64.b64encode(
+            response.body
+        ).decode("ascii")
+        script.collection_errors.extend(
+            {"stage": "script_decoding", **error} for error in errors
+        )
     script.source_url = response.url
     script.source = source
     script.sha256 = sha256_text(source)

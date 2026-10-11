@@ -58,7 +58,9 @@ def collect_page(
             )
         )
 
-    content, encoding, encoding_source, decoding_errors = decode_html(response.body, response.encoding)
+    content, encoding, encoding_source, decoding_errors = decode_html(
+        response.body, response.encoding
+    )
     errors.extend(decoding_errors)
     return L3Input(
         original_url=url,
@@ -70,8 +72,13 @@ def collect_page(
             truncated=response.truncated,
         ),
         collection_errors=errors,
-        response={"status_code": response.status_code, "headers": response.headers,
-                  "url": response.url, "received_bytes": len(response.body),
-                  "body_complete": not response.truncated,
-                  "encoding_source": encoding_source, "decoding_complete": not decoding_errors},
+        response={
+            "status_code": response.status_code,
+            "headers": response.headers,
+            "url": response.url,
+            "received_bytes": len(response.body),
+            "body_complete": not response.truncated,
+            "encoding_source": encoding_source,
+            "decoding_complete": not decoding_errors,
+        },
     )

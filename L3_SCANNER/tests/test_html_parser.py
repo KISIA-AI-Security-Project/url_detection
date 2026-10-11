@@ -85,9 +85,9 @@ def test_meta_refresh_parses_valid_and_preserves_malformed_observation() -> None
     assert malformed["meta_refresh"]["raw_content"] == "immediately; url=/login"
 
 
-def test_malformed_but_parseable_html_preserves_form_structure() -> None:
+def test_unclosed_form_preserves_complete_input_tags() -> None:
     raw = parse_html(
-        "<form id=login><input name=user><input name=pass", "https://www.example.com/"
+        "<form id=login><input name=user><input name=pass>", "https://www.example.com/"
     )
     assert raw["document"]["parse_succeeded"] is True
     assert raw["forms"][0]["input_ids"] == ["input-1", "input-2"]

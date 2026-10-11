@@ -16,6 +16,8 @@ web-local-state/
 .venv/
 venv/
 .test-tmp/
+.mypy_cache/
+.ruff_cache/
 *.egg-info/
 *.tsbuildinfo
 output/

@@ -186,13 +186,14 @@ class PartialReadError(Exception):
     def __init__(self, body, error):
         self.body, self.error = body, error
 
+
 def _read_bounded_body(response, max_bytes):
     chunks = []
     size = 0
     try:
         for chunk in response.iter_bytes():
             remaining = max_bytes - size
-            chunks.append(chunk[:max(remaining, 0)])
+            chunks.append(chunk[: max(remaining, 0)])
             size += min(len(chunk), max(remaining, 0))
             if len(chunk) > remaining:
                 return b"".join(chunks), True
@@ -214,7 +215,15 @@ def _final_response(response: httpx.Response, max_bytes: int) -> CollectedRespon
         body, truncated = _read_bounded_body(response, max_bytes)
     except PartialReadError as exc:
         body, truncated = exc.body, True
-        errors.append(collection_error("collection", "response_body_interrupted", str(exc.error), received_bytes=len(body), error_type=type(exc.error).__name__))
+        errors.append(
+            collection_error(
+                "collection",
+                "response_body_interrupted",
+                str(exc.error),
+                received_bytes=len(body),
+                error_type=type(exc.error).__name__,
+            )
+        )
     if response.status_code >= 400:
         errors.append(
             collection_error(

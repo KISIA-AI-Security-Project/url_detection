@@ -30,7 +30,9 @@ def to_l3_input(snapshot: PageSnapshot) -> L3Input:
     encoding_source = None
     decoding_errors = []
     if snapshot.response_received:
-        content, encoding, encoding_source, decoding_errors = decode_html(snapshot.body, snapshot.encoding)
+        content, encoding, encoding_source, decoding_errors = decode_html(
+            snapshot.body, snapshot.encoding
+        )
         errors.extend(decoding_errors)
         if snapshot.content_type not in _HTML_CONTENT_TYPES:
             errors.append(
@@ -52,6 +54,10 @@ def to_l3_input(snapshot: PageSnapshot) -> L3Input:
             truncated=snapshot.truncated,
         ),
         collection_errors=errors,
-        response={**snapshot.metadata(), "body_complete": snapshot.response_received and not snapshot.truncated,
-                  "encoding_source":encoding_source, "decoding_complete":not decoding_errors},
+        response={
+            **snapshot.metadata(),
+            "body_complete": snapshot.response_received and not snapshot.truncated,
+            "encoding_source": encoding_source,
+            "decoding_complete": not decoding_errors,
+        },
     )

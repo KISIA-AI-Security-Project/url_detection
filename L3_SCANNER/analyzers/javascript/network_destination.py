@@ -26,11 +26,23 @@ def analyze(raw: Mapping[str, Any]) -> dict[str, Any]:
             for event in events
         ],
     }
-    contexts = [{key: deepcopy(event[key]) for key in
-                 ('event_id', 'script_id', 'source_range', 'call_context', 'control_context', 'request_context')}
-                for event in all_events if event.get('request_context')]
+    contexts = [
+        {
+            key: deepcopy(event[key])
+            for key in (
+                "event_id",
+                "script_id",
+                "source_range",
+                "call_context",
+                "control_context",
+                "request_context",
+            )
+        }
+        for event in all_events
+        if event.get("request_context")
+    ]
     if contexts:
-        evidence['request_contexts'] = contexts
+        evidence["request_contexts"] = contexts
     output = result(
         raw,
         "L3-J-04",

@@ -33,8 +33,8 @@ def analyze(raw: Mapping[str, Any]) -> dict[str, Any]:
         ]
     evidence = {
         "methods": methods,
-        "linked_execution_events":linked,
-        "decode_observations":decode_events,
+        "linked_execution_events": linked,
+        "decode_observations": decode_events,
         "chain": [item for item in chain if item],
         "execution_connected": True if linked else False,
     }

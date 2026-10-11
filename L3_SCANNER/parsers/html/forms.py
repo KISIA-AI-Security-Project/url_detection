@@ -71,7 +71,7 @@ def _append_forms(
                 "action_present": action_present,
                 "action_raw": action_raw,
                 "action_url": action_url,
-                "relations":url_relations(document_url, action_url),
+                "relations": url_relations(document_url, action_url),
                 "action_etld1": etld1(action_url),
                 "action_resolution": resolution,
                 "input_ids": [],
@@ -87,13 +87,22 @@ def _append_inputs(
 ) -> None:
     """입력 필드 속성과 소속 폼을 기록하고 폼의 ``input_ids``도 갱신한다."""
     forms_by_id = {form["form_id"]: form for form in raw["forms"]}
-    input_tags = [item for item in soup.find_all(["input", "textarea", "select"]) if isinstance(item, Tag)]
+    input_tags = [
+        item
+        for item in soup.find_all(["input", "textarea", "select"])
+        if isinstance(item, Tag)
+    ]
     input_ids = stable_ids(input_tags, "input")
     # Selector resolution must precede credential classification, including non-input IDs.
     raw["dom_lookup_elements"] = [
-        {"tag": tag.name, "html_id": _optional_attribute(tag, "id"),
-         "name": _optional_attribute(tag, "name"), "field_id": input_ids.get(id(tag))}
-        for tag in soup.find_all(True) if isinstance(tag, Tag)
+        {
+            "tag": tag.name,
+            "html_id": _optional_attribute(tag, "id"),
+            "name": _optional_attribute(tag, "name"),
+            "field_id": input_ids.get(id(tag)),
+        }
+        for tag in soup.find_all(True)
+        if isinstance(tag, Tag)
     ]
     for input_tag in input_tags:
         form_id = _associated_form(input_tag, form_ids, html_form_ids)
@@ -115,27 +124,50 @@ def _append_inputs(
             forms_by_id[form_id]["input_ids"].append(field["field_id"])
 
 
-def _append_buttons(raw, soup, form_ids, html_form_ids, document_url, effective_base) -> None:
+def _append_buttons(
+    raw, soup, form_ids, html_form_ids, document_url, effective_base
+) -> None:
     """버튼별 제출 목적지 덮어쓰기를 폼 기본값과 구별해 보존한다."""
-    tags = [t for t in soup.find_all(["button", "input"]) if isinstance(t, Tag)
-            and (t.name == "button" or str(t.get("type", "")).lower() in {"submit", "image", "button", "reset"})]
+    tags = [
+        t
+        for t in soup.find_all(["button", "input"])
+        if isinstance(t, Tag)
+        and (
+            t.name == "button"
+            or str(t.get("type", "")).lower() in {"submit", "image", "button", "reset"}
+        )
+    ]
     ids = stable_ids(tags, "button")
     forms = {f["form_id"]: f for f in raw["forms"]}
     for button in tags:
         form_id = _associated_form(button, form_ids, html_form_ids)
         parent = forms.get(form_id, {})
         action = _optional_attribute(button, "formaction")
-        resolved = (document_url if action == "" else resolve_http_url(action, effective_base)) if action is not None else parent.get("action_url")
-        raw["buttons"].append({
-            "button_id": ids[id(button)], "html_id": _optional_attribute(button, "id"),
-            "form_id": form_id, "type": str(button.get("type") or "submit").lower(),
-            "text": button.get_text(" ", strip=True) if button.name == "button" else str(button.get("value") or button.get("alt") or ""),
-            "formaction_raw": action, "effective_action_url": resolved,
-            "relations":url_relations(document_url, resolved),
-            "formmethod_raw": _optional_attribute(button, "formmethod"),
-            "effective_method": str(button.get("formmethod") or parent.get("method") or "get").lower(),
-            "disabled": button.has_attr("disabled"), "submission_scope": "static submit control; activation unobserved",
-        })
+        resolved = (
+            (document_url if action == "" else resolve_http_url(action, effective_base))
+            if action is not None
+            else parent.get("action_url")
+        )
+        raw["buttons"].append(
+            {
+                "button_id": ids[id(button)],
+                "html_id": _optional_attribute(button, "id"),
+                "form_id": form_id,
+                "type": str(button.get("type") or "submit").lower(),
+                "text": button.get_text(" ", strip=True)
+                if button.name == "button"
+                else str(button.get("value") or button.get("alt") or ""),
+                "formaction_raw": action,
+                "effective_action_url": resolved,
+                "relations": url_relations(document_url, resolved),
+                "formmethod_raw": _optional_attribute(button, "formmethod"),
+                "effective_method": str(
+                    button.get("formmethod") or parent.get("method") or "get"
+                ).lower(),
+                "disabled": button.has_attr("disabled"),
+                "submission_scope": "static submit control; activation unobserved",
+            }
+        )
 
 
 def _associated_form(

@@ -23,13 +23,13 @@ def _ast_to_dict(root: Any) -> dict[str, Any]:
     (including Python 3 re.Pattern) retain Esprima ToDictVisitor semantics.
     Actual cyclic Object input delegates to the original visitor.
     """
-    from esprima.objects import Array, Object
+    from esprima.objects import Array, Object  # type: ignore[import-untyped]
 
     mapped_names = {"isAsync": "async", "allowAwait": "await"}
     holder: list[Any] = [None]
     active_objects: set[int] = set()
     leave = object()
-    stack = [(root, holder, 0)]
+    stack: list[tuple[Any, Any, Any]] = [(root, holder, 0)]
     while stack:
         value, target, key = stack.pop()
         if target is leave:
@@ -44,8 +44,8 @@ def _ast_to_dict(root: Any) -> dict[str, Any]:
             value = value.__dict__
         value_type = type(value)
         if value_type is dict:
-            converted: dict[str, Any] = {}
-            children = []
+            converted: Any = {}
+            children: list[tuple[Any, Any, Any]] = []
             for field, item in value.items():
                 if item is not None and not field.startswith("_"):
                     field = str(field)
@@ -163,22 +163,34 @@ def expression_text(node: Any, source: str) -> str:
     return ""
 
 
-def behavior_observations(node: Any) -> list[dict[str, str]]:
+def behavior_observations(node: Any) -> list[dict[str, Any]]:
     """분기 내부의 호출·대입·return/throw를 실행 없이 구조적으로 요약한다."""
-    observations: list[dict[str, str]] = []
+    observations: list[dict[str, Any]] = []
     for item in walk(node):
         kind = item.get("type")
         if kind in {"CallExpression", "NewExpression"}:
             api = callee_path(item.get("callee"))
             if api:
-                args = [arg.get("value") if arg.get("type") == "Literal" else {"type":arg.get("type")} for arg in item.get("arguments", [])]
-                observations.append({"kind": "call", "target": api, "arguments":args})
+                args = [
+                    arg.get("value")
+                    if arg.get("type") == "Literal"
+                    else {"type": arg.get("type")}
+                    for arg in item.get("arguments", [])
+                ]
+                observations.append({"kind": "call", "target": api, "arguments": args})
         elif kind == "AssignmentExpression":
             target = member_path(item.get("left")) or identifier_name(item.get("left"))
             if target:
                 value = item.get("right") or {}
-                observations.append({"kind": "assignment", "target": target,
-                                     "value":value.get("value") if value.get("type")=="Literal" else {"type":value.get("type")}})
+                observations.append(
+                    {
+                        "kind": "assignment",
+                        "target": target,
+                        "value": value.get("value")
+                        if value.get("type") == "Literal"
+                        else {"type": value.get("type")},
+                    }
+                )
         elif kind in {"ReturnStatement", "ThrowStatement"}:
             observations.append(
                 {"kind": kind.removesuffix("Statement").lower(), "target": ""}

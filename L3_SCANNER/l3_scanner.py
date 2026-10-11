@@ -142,9 +142,23 @@ def _prepare_scripts(
         return scripts
 
     from urllib.parse import urldefrag
-    candidates = [script for script in scripts if script.type == "external" and script.source is None
-                  and (script.media_type or "").split(";",1)[0].lower() in {"", "module", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript"}]
-    fetched = {}
+
+    candidates = [
+        script
+        for script in scripts
+        if script.type == "external"
+        and script.source is None
+        and (script.media_type or "").split(";", 1)[0].lower()
+        in {
+            "",
+            "module",
+            "text/javascript",
+            "application/javascript",
+            "text/ecmascript",
+            "application/ecmascript",
+        }
+    ]
+    fetched: dict[str, ScriptInput] = {}
     selected = []
     duplicates = []
     for script in candidates:
@@ -165,12 +179,21 @@ def _prepare_scripts(
             collect_external_script(script, runtime)
     else:
         with ThreadPoolExecutor(max_workers=min(5, len(selected))) as executor:
-            futures = [executor.submit(collect_external_script, script, runtime)
-                       for script in selected]
+            futures = [
+                executor.submit(collect_external_script, script, runtime)
+                for script in selected
+            ]
             for future in futures:
                 future.result()
     for script, other in duplicates:
-        for attr in ["source", "sha256", "size", "truncated", "collection_errors", "response"]:
+        for attr in [
+            "source",
+            "sha256",
+            "size",
+            "truncated",
+            "collection_errors",
+            "response",
+        ]:
             setattr(script, attr, deepcopy(getattr(other, attr)))
     return scripts
 
@@ -213,7 +236,10 @@ def _collect_errors(
     errors.extend(deepcopy(html_raw.get("errors", [])))
     errors.extend(deepcopy(javascript_raw.get("errors", [])))
     for script in scan_input.scripts:
-        errors.extend({**deepcopy(error),'script_id':script.script_id} for error in script.collection_errors)
+        errors.extend(
+            {**deepcopy(error), "script_id": script.script_id}
+            for error in script.collection_errors
+        )
     return errors
 
 
@@ -257,16 +283,30 @@ class L3Scanner:
             scan_input.document_url,
             truncated=scan_input.html.truncated,
         )
-        html_raw['credential_classification']=classify_credential_fields(html_raw,self.policy)
+        html_raw["credential_classification"] = classify_credential_fields(
+            html_raw, self.policy
+        )
         scan_input.scripts = _prepare_scripts(
             scan_input,
             html_raw,
             self.runtime,
             fetch_external_sources=fetch_external_sources,
         )
-        self._bind_errors(scan_input,[('page_collection',scan_input.collection_errors,{})]+[
-            ('script_collection',script.collection_errors,{'script_id':script.script_id,'url':script.source_url or scan_input.document_url})
-            for script in scan_input.scripts])
+        self._bind_errors(
+            scan_input,
+            [("page_collection", scan_input.collection_errors, {})]
+            + [
+                (
+                    "script_collection",
+                    script.collection_errors,
+                    {
+                        "script_id": script.script_id,
+                        "url": script.source_url or scan_input.document_url,
+                    },
+                )
+                for script in scan_input.scripts
+            ],
+        )
         javascript_raw = _parse_javascript_with_deferred_gc(
             scan_input,
             html_raw,
@@ -274,8 +314,13 @@ class L3Scanner:
             self.runtime,
         )
 
-        self._bind_errors(scan_input,[('html_parsing',html_raw.get('errors',[]),{}),
-            ('javascript_analysis',javascript_raw.get('errors',[]),{})])
+        self._bind_errors(
+            scan_input,
+            [
+                ("html_parsing", html_raw.get("errors", []), {}),
+                ("javascript_analysis", javascript_raw.get("errors", []), {}),
+            ],
+        )
         signals = analyze_html(html_raw, scan_input.document_url, self.policy)
         signals.extend(analyze_javascript(javascript_raw, self.policy))
         errors = _collect_errors(scan_input, html_raw, javascript_raw)
@@ -285,7 +330,9 @@ class L3Scanner:
         result_html_raw = deepcopy(html_raw)
         result_html_raw.pop("scripts", None)
         result_html_raw["source"] = scan_input.html.content
-        result_html_raw["source_scope"] = "decoded collected HTML, bounded by max_html_bytes; page scripts were not executed"
+        result_html_raw["source_scope"] = (
+            "decoded collected HTML, bounded by max_html_bytes; page scripts were not executed"
+        )
         finished_at = _now_iso()
         return {
             "schema_version": SCHEMA_VERSION,
@@ -297,15 +344,31 @@ class L3Scanner:
             },
             "scan": {
                 "status": (
-                    ("partial" if errors or not javascript_raw["analysis"]["source_complete"] or not html_raw["document"]["source_complete"] else "completed")
-                    if bool(html_raw.get("document", {}).get("parse_succeeded")) else "failed"
+                    (
+                        "partial"
+                        if errors
+                        or not javascript_raw["analysis"]["source_complete"]
+                        or not html_raw["document"]["source_complete"]
+                        else "completed"
+                    )
+                    if bool(html_raw.get("document", {}).get("parse_succeeded"))
+                    else "failed"
                 ),
                 "policy_name": self.policy.policy_name,
-                "observation": {"html_parsed":bool(html_raw.get("document",{}).get("parse_succeeded")),
-                                "html_complete":html_raw.get("document",{}).get("source_complete"),
-                                "javascript_complete":javascript_raw["analysis"]["source_complete"],
-                                "browser_execution_observed":False, "finished":True},
-                "response":scan_input.response,
+                "observation": {
+                    "html_parsed": bool(
+                        html_raw.get("document", {}).get("parse_succeeded")
+                    ),
+                    "html_complete": html_raw.get("document", {}).get(
+                        "source_complete"
+                    ),
+                    "javascript_complete": javascript_raw["analysis"][
+                        "source_complete"
+                    ],
+                    "browser_execution_observed": False,
+                    "finished": True,
+                },
+                "response": scan_input.response,
                 "brand_policy": (
                     dict(self.policy.brand_policy_metadata)
                     if self.policy.brand_policy_metadata is not None
@@ -316,24 +379,33 @@ class L3Scanner:
             },
             "raw": {"html": result_html_raw, "javascript": javascript_raw},
             "signals": signals,
-            "analysis_facts": analyze_native_submission(result_html_raw) + analyze_static_data(javascript_raw),
+            "analysis_facts": analyze_native_submission(result_html_raw)
+            + analyze_static_data(javascript_raw),
             "errors": errors,
         }
 
     @staticmethod
-    def _bind_errors(scan_input,groups):
+    def _bind_errors(scan_input, groups):
         # Bind before copying so one occurrence retains its identity in raw,
         # aggregate errors and impacted analyses. Unrelated targets stay apart.
-        for group_index,(stage,errors,target) in enumerate(groups):
-            for index,error in enumerate(errors):
-                error.setdefault('occurrence_id',f'l3:{stage}:{group_index}:{index}')
-                error.setdefault('stage',stage)
-                error.setdefault('impact_scope','acquisition' if stage in ('page_collection','script_collection') or error.get('code')=='html_source_truncated' else 'analysis')
-                error.setdefault('document_url',scan_input.document_url)
-                for key,val in target.items():error.setdefault(key,val)
+        for group_index, (stage, errors, target) in enumerate(groups):
+            for index, error in enumerate(errors):
+                error.setdefault("occurrence_id", f"l3:{stage}:{group_index}:{index}")
+                error.setdefault("stage", stage)
+                error.setdefault(
+                    "impact_scope",
+                    "acquisition"
+                    if stage in ("page_collection", "script_collection")
+                    or error.get("code") == "html_source_truncated"
+                    else "analysis",
+                )
+                error.setdefault("document_url", scan_input.document_url)
+                for key, val in target.items():
+                    error.setdefault(key, val)
 
     def scan_snapshot(self, snapshot) -> dict[str, Any]:
         from L3_SCANNER.adapters.page_snapshot import to_l3_input
+
         return self._scan_content(to_l3_input(snapshot), fetch_external_sources=True)
 
     def scan_url(self, url: str) -> dict[str, Any]:

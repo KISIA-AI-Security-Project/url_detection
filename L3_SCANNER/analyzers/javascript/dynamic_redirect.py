@@ -15,7 +15,7 @@ def analyze(raw: Mapping[str, Any]) -> dict[str, Any]:
     representative = events[0] if events else {}
     evidence = {
         "redirect_count": len(events),
-        "redirect_observations":events,
+        "redirect_observations": events,
         "api": representative.get("api"),
         "destination_url": representative.get("destination_url"),
     }

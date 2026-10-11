@@ -45,20 +45,30 @@ def credential_fields(
     구분해 인덱싱한다. 일반 요소도 보존하므로 뒤의 민감 필드로 건너뛰지 않는다.
     """
     from L3_SCANNER.analyzers.credential_classification import classification_result
-    classification=classification_result(html_raw,policy)
-    by_field={x['field_id']:x for x in classification['fields']}
+
+    classification = classification_result(html_raw, policy)
+    by_field = {x["field_id"]: x for x in classification["fields"]}
     fields: dict[str, dict[str, Any]] = {}
-    inputs = {item['field_id']: item for item in html_raw.get('inputs', [])}
-    for element in html_raw.get('dom_lookup_elements', html_raw.get('inputs', [])):
-        item = inputs.get(element.get('field_id'), element)
-        classified=by_field.get(item.get('field_id'),{})
-        credential_type=classified.get('credential_type')
+    inputs = {item["field_id"]: item for item in html_raw.get("inputs", [])}
+    for element in html_raw.get("dom_lookup_elements", html_raw.get("inputs", [])):
+        item = inputs.get(element.get("field_id"), element)
+        classified = by_field.get(item.get("field_id"), {})
+        credential_type = classified.get("credential_type")
         field_id = str(item.get("field_id") or item.get("id") or item.get("name") or "")
-        data = {"field_id":field_id, "credential_type":credential_type, "tag":element.get("tag", "input"),"classification_state":classified.get("state","not_performed")}
-        selectors = [("id:", element.get("html_id") or element.get("id")), ("name:", element.get("name")),
-                     ("tag:", data['tag'])]
-        if data['tag'] == 'input': selectors.append(('input-name:', element.get('name')))
+        data = {
+            "field_id": field_id,
+            "credential_type": credential_type,
+            "tag": element.get("tag", "input"),
+            "classification_state": classified.get("state", "not_performed"),
+        }
+        selectors = [
+            ("id:", element.get("html_id") or element.get("id")),
+            ("name:", element.get("name")),
+            ("tag:", data["tag"]),
+        ]
+        if data["tag"] == "input":
+            selectors.append(("input-name:", element.get("name")))
         for prefix, selector in selectors:
             if selector:
-                fields.setdefault(prefix+str(selector), data)
+                fields.setdefault(prefix + str(selector), data)
     return fields

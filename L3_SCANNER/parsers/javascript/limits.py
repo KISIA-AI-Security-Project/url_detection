@@ -47,7 +47,11 @@ def enforce_event_limit(raw: dict[str, Any], limit: int) -> None:
         retained = {e.get("event_id") for key in _EVENT_COLLECTIONS for e in raw[key]}
         for event in raw["network_requests"]:
             links = event.get("source_links", [])
-            missing = [link for link in links if link.get("source_event_id") not in retained]
+            missing = [
+                link for link in links if link.get("source_event_id") not in retained
+            ]
             if missing:
                 event["unresolved_source_links"] = missing
-                event["source_links"] = [link for link in links if link.get("source_event_id") in retained]
+                event["source_links"] = [
+                    link for link in links if link.get("source_event_id") in retained
+                ]

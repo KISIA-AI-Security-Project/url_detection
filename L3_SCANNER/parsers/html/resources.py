@@ -1,6 +1,6 @@
 """이미지·Favicon·Open Graph·Script 리소스 메타데이터 Builder."""
 
-from typing import Any
+from typing import Any, cast
 
 from bs4 import BeautifulSoup, Tag
 
@@ -25,20 +25,50 @@ def build_resources(
     _append_favicon(raw, soup, effective_base)
     _append_open_graph(raw, soup, effective_base)
     _append_scripts(raw, soup, effective_base)
-    raw["links"] = [{"link_id": f"link-{i}", "text": a.get_text(" ", strip=True),
-                     "href_raw": a.get("href"), "destination_url": resolve_http_url(a.get("href"), effective_base),
-                     "download": a.get("download"), "target": a.get("target")}
-                    for i, a in enumerate(soup.find_all("a", href=True), 1)]
-    raw["frames"] = [{"frame_id": f"frame-{i}", "src_raw": f.get("src"),
-                      "source_url": resolve_http_url(f.get("src"), effective_base),
-                      "srcdoc": f.get("srcdoc"), "content_observed": False}
-                     for i, f in enumerate(soup.find_all("iframe"), 1)]
-    raw["inline_handlers"] = [{"tag": t.name, "html_id": t.get("id"), "event": str(k),
-                               "source": str(v), "execution_observed": False}
-                              for t in soup.find_all(True) for k, v in t.attrs.items()
-                              if str(k).lower().startswith("on")]
+    raw["links"] = [
+        {
+            "link_id": f"link-{i}",
+            "text": a.get_text(" ", strip=True),
+            "href_raw": a.get("href"),
+            "destination_url": resolve_http_url(
+                cast(str | None, a.get("href")), effective_base
+            ),
+            "download": a.get("download"),
+            "target": a.get("target"),
+        }
+        for i, a in enumerate(cast(list[Tag], soup.find_all("a", href=True)), 1)
+    ]
+    raw["frames"] = [
+        {
+            "frame_id": f"frame-{i}",
+            "src_raw": f.get("src"),
+            "source_url": resolve_http_url(
+                cast(str | None, f.get("src")), effective_base
+            ),
+            "srcdoc": f.get("srcdoc"),
+            "content_observed": False,
+        }
+        for i, f in enumerate(cast(list[Tag], soup.find_all("iframe")), 1)
+    ]
+    raw["inline_handlers"] = [
+        {
+            "tag": t.name,
+            "html_id": t.get("id"),
+            "event": str(k),
+            "source": str(v),
+            "execution_observed": False,
+        }
+        for t in cast(list[Tag], soup.find_all(True))
+        for k, v in t.attrs.items()
+        if str(k).lower().startswith("on")
+    ]
     if raw["inline_handlers"]:
-        raw["errors"].append({"code": "inline_handlers_unanalyzed", "message": "Inline event handler source preserved; binding and runtime effects not analyzed"})
+        raw["errors"].append(
+            {
+                "code": "inline_handlers_unanalyzed",
+                "message": "Inline event handler source preserved; binding and runtime effects not analyzed",
+            }
+        )
 
 
 def _append_images(raw: dict[str, Any], soup: BeautifulSoup, base: str) -> None:

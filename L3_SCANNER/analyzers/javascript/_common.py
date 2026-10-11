@@ -25,7 +25,9 @@ def result(
     양성 이벤트는 일부 Source만 분석했어도 실제 관측으로 유지할 수 있다. 반면 이벤트가
     없을 때 정책·Parser·Source가 불완전하면 ``False``가 아니라 ``None``을 반환한다.
     """
-    scripts = [s for s in raw.get("scripts", []) if s.get("analysis_status") != "data_block"]
+    scripts = [
+        s for s in raw.get("scripts", []) if s.get("analysis_status") != "data_block"
+    ]
     analysis = raw.get("analysis", {})
     if not scripts:
         return signal_result(
@@ -36,7 +38,15 @@ def result(
             detected=None,
             evidence=evidence,
         )
-    field_limits=[e for e in raw.get('errors',[]) if e.get('code')=='credential_classification_failed'] if signal_id in {'L3-J-05','L3-J-06'} else []
+    field_limits = (
+        [
+            e
+            for e in raw.get("errors", [])
+            if e.get("code") == "credential_classification_failed"
+        ]
+        if signal_id in {"L3-J-05", "L3-J-06"}
+        else []
+    )
     if detected is True:
         return signal_result(
             signal_id,
@@ -65,7 +75,10 @@ def result(
             status="error",
             detected=None,
             evidence=evidence,
-            error={"code": "javascript_analysis_unavailable", "causes":list(raw.get("errors", []))},
+            error={
+                "code": "javascript_analysis_unavailable",
+                "causes": list(raw.get("errors", [])),
+            },
         )
     if not bool(analysis.get("source_complete", False)) and detected is not True:
         return signal_result(
@@ -75,30 +88,47 @@ def result(
             status="error",
             detected=None,
             evidence=evidence,
-            error={"code": "javascript_analysis_incomplete", "causes":list(raw.get("errors", []))},
+            error={
+                "code": "javascript_analysis_incomplete",
+                "causes": list(raw.get("errors", [])),
+            },
         )
-    all_ids={f'L3-J-{i:02}' for i in range(1,10)}
-    affected={
-        'credential_classification_failed':{'L3-J-05','L3-J-06'},
-        'callback_parameters_unresolved':all_ids,
-        'function_call_depth_limit':all_ids,
-        'function_return_value_unresolved':all_ids,
-        'javascript_analysis_limit':all_ids,
-        'script_order_unresolved':all_ids,
-        'css_selector_unresolved':{'L3-J-05','L3-J-06'},
-        'dom_collection_unresolved':{'L3-J-05','L3-J-06'},
-        'fetch_options_unresolved':{'L3-J-06'},
-        'object_write_unresolved':{'L3-J-06'},
-        'object_structure_unresolved':{'L3-J-06'},
-        'object_read_unresolved':{'L3-J-06'},
-        'fetch_payload_conversion_unresolved':{'L3-J-06'},
-        'fetch_request_unresolved':{'L3-J-06'},
-        'conditional_value_unresolved':all_ids-{'L3-J-08','L3-J-09'},
+    all_ids = {f"L3-J-{i:02}" for i in range(1, 10)}
+    affected = {
+        "credential_classification_failed": {"L3-J-05", "L3-J-06"},
+        "callback_parameters_unresolved": all_ids,
+        "function_call_depth_limit": all_ids,
+        "function_return_value_unresolved": all_ids,
+        "javascript_analysis_limit": all_ids,
+        "script_order_unresolved": all_ids,
+        "css_selector_unresolved": {"L3-J-05", "L3-J-06"},
+        "dom_collection_unresolved": {"L3-J-05", "L3-J-06"},
+        "fetch_options_unresolved": {"L3-J-06"},
+        "object_write_unresolved": {"L3-J-06"},
+        "object_structure_unresolved": {"L3-J-06"},
+        "object_read_unresolved": {"L3-J-06"},
+        "fetch_payload_conversion_unresolved": {"L3-J-06"},
+        "fetch_request_unresolved": {"L3-J-06"},
+        "conditional_value_unresolved": all_ids - {"L3-J-08", "L3-J-09"},
     }
-    semantic_causes=[e for e in raw.get('errors',[]) if signal_id in affected.get(e.get('code'),set())]
+    semantic_causes = [
+        e
+        for e in raw.get("errors", [])
+        if signal_id in affected.get(e.get("code"), set())
+    ]
     if semantic_causes and detected is False:
-        return signal_result(signal_id,'javascript',name,status='error',detected=None,evidence=evidence,
-                             error={'code':'javascript_relationship_unresolved','causes':semantic_causes})
+        return signal_result(
+            signal_id,
+            "javascript",
+            name,
+            status="error",
+            detected=None,
+            evidence=evidence,
+            error={
+                "code": "javascript_relationship_unresolved",
+                "causes": semantic_causes,
+            },
+        )
     return signal_result(
         signal_id,
         "javascript",

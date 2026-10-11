@@ -27,55 +27,121 @@ class ObservationMixin(AnalyzerBase):
             if len(arguments) > destination_index
             else None
         )
-        destination_value = arguments[destination_index] if len(arguments)>destination_index else Eval()
-        destination_url = resolve_http_url(destination, self.effective_base_url) if isinstance(destination, str) else None
+        destination_value = (
+            arguments[destination_index]
+            if len(arguments) > destination_index
+            else Eval()
+        )
+        destination_url = (
+            resolve_http_url(destination, self.effective_base_url)
+            if isinstance(destination, str)
+            else None
+        )
         prefix = destination_value.url_prefix
-        prefix_url = resolve_http_url(prefix, self.effective_base_url) if prefix else None
+        prefix_url = (
+            resolve_http_url(prefix, self.effective_base_url) if prefix else None
+        )
         # 호스트 중간에 미확정 값이 있으면 외부 목적지를 확정할 수 없다.
-        known_prefix = prefix_url if prefix_url and ("?" in prefix_url or urlsplit(prefix_url).path.startswith("/")) else None
+        known_prefix = (
+            prefix_url
+            if prefix_url
+            and ("?" in prefix_url or urlsplit(prefix_url).path.startswith("/"))
+            else None
+        )
         relation_url = destination_url or known_prefix
         destination_domain = etld1(relation_url)
         relations = url_relations(self.document_url, relation_url)
         taints = []
         positions = []
-        configuration = 'not_checked'
-        payloads = [("url" if i == destination_index else "request_argument", value) for i, value in enumerate(arguments)]
-        if api == 'fetch':
-            payloads = [('url', destination_value)]
+        configuration = "not_checked"
+        payloads = [
+            ("url" if i == destination_index else "request_argument", value)
+            for i, value in enumerate(arguments)
+        ]
+        if api == "fetch":
+            payloads = [("url", destination_value)]
             if len(arguments) > 1:
                 options = arguments[1].properties
                 if options is None:
-                    self._limitation('fetch_options_unresolved', 'Fetch options fields are not statically resolved; no options payload relationship asserted', node)
+                    self._limitation(
+                        "fetch_options_unresolved",
+                        "Fetch options fields are not statically resolved; no options payload relationship asserted",
+                        node,
+                    )
                 else:
-                    body=options.get('body')
-                    method=options.get('method')
-                    method_value='GET' if method is None else method.literal.upper() if isinstance(method.literal,str) else None
-                    known_null=body is not None and body.literal_known and body.literal is None
-                    non_null=body is not None and (body.literal is not None or body.container_kind is not None or bool(body.current_taints()))
-                    configuration='no_known_method_body_conflict'
+                    body = options.get("body")
+                    method = options.get("method")
+                    method_value = (
+                        "GET"
+                        if method is None
+                        else method.literal.upper()
+                        if isinstance(method.literal, str)
+                        else None
+                    )
+                    known_null = (
+                        body is not None and body.literal_known and body.literal is None
+                    )
+                    non_null = body is not None and (
+                        body.literal is not None
+                        or body.container_kind is not None
+                        or bool(body.current_taints())
+                    )
+                    configuration = "no_known_method_body_conflict"
                     if method_value is None:
-                        configuration='method_unresolved'
-                        self._limitation('fetch_request_unresolved', 'Fetch method is unresolved; request validity and payload relationship not asserted', node)
-                    elif method_value in ('GET','HEAD') and body is not None and not known_null:
-                        configuration='invalid_get_head_body' if non_null else 'body_nullability_unresolved'
-                        self._limitation('fetch_request_unresolved', 'GET/HEAD Request cannot contain a non-null body; keep attempted destination and reads without asserting transmission', node)
+                        configuration = "method_unresolved"
+                        self._limitation(
+                            "fetch_request_unresolved",
+                            "Fetch method is unresolved; request validity and payload relationship not asserted",
+                            node,
+                        )
+                    elif (
+                        method_value in ("GET", "HEAD")
+                        and body is not None
+                        and not known_null
+                    ):
+                        configuration = (
+                            "invalid_get_head_body"
+                            if non_null
+                            else "body_nullability_unresolved"
+                        )
+                        self._limitation(
+                            "fetch_request_unresolved",
+                            "GET/HEAD Request cannot contain a non-null body; keep attempted destination and reads without asserting transmission",
+                            node,
+                        )
                     if body is not None:
                         if body.container_kind:
-                            self._limitation('fetch_payload_conversion_unresolved', 'Object/array BodyInit conversion is not modeled; its internal fields are not asserted as transmitted', node)
+                            self._limitation(
+                                "fetch_payload_conversion_unresolved",
+                                "Object/array BodyInit conversion is not modeled; its internal fields are not asserted as transmitted",
+                                node,
+                            )
                         else:
-                            payloads.append(('body',body))
-                    headers=options.get('headers')
+                            payloads.append(("body", body))
+                    headers = options.get("headers")
                     if headers is not None:
                         if headers.properties is None:
-                            self._limitation('fetch_payload_conversion_unresolved', 'Only statically recorded header dictionaries are modeled', node)
+                            self._limitation(
+                                "fetch_payload_conversion_unresolved",
+                                "Only statically recorded header dictionaries are modeled",
+                                node,
+                            )
                         else:
                             for value in headers.properties.values():
                                 if value.container_kind:
-                                    self._limitation('fetch_payload_conversion_unresolved', 'Object/array header value conversion is not modeled', node)
+                                    self._limitation(
+                                        "fetch_payload_conversion_unresolved",
+                                        "Object/array header value conversion is not modeled",
+                                        node,
+                                    )
                                 else:
-                                    payloads.append(('headers',value))
-                    if configuration in ('method_unresolved','invalid_get_head_body','body_nullability_unresolved'):
-                        payloads=[]
+                                    payloads.append(("headers", value))
+                    if configuration in (
+                        "method_unresolved",
+                        "invalid_get_head_body",
+                        "body_nullability_unresolved",
+                    ):
+                        payloads = []
         for position, value in payloads:
             if position == "url" and prefix and "#" in prefix:
                 continue  # fragment는 HTTP 요청에 실리지 않는다.
@@ -90,9 +156,15 @@ class ObservationMixin(AnalyzerBase):
                 "destination_url": destination_url,
                 "destination_etld1": destination_domain,
                 "destination_prefix": known_prefix,
-                "destination_candidates": [resolve_http_url(v, self.effective_base_url) for v in destination_value.possible_literals if isinstance(v, str)],
+                "destination_candidates": [
+                    resolve_http_url(v, self.effective_base_url)
+                    for v in destination_value.possible_literals
+                    if isinstance(v, str)
+                ],
                 "relations": relations,
-                "external": None if relations["same_site_scope"] is None else not relations["same_site_scope"],
+                "external": None
+                if relations["same_site_scope"] is None
+                else not relations["same_site_scope"],
                 "source_links": [
                     {
                         "source_event_id": taint.source_event_id,

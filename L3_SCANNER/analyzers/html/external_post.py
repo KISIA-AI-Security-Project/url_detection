@@ -35,11 +35,21 @@ def analyze(
         if str(form.get("method", "")).lower() == "post"
     ]
     for button in raw.get("buttons", []):
-        if button.get("form_id") and button.get("type") in {"submit", "image"} and not button.get("disabled") and button.get("effective_method") == "post":
-            posts.append({"form_id":button["form_id"],"button_id":button["button_id"],
-                          "action_url":button.get("effective_action_url"),
-                          "action_etld1":etld1(button.get("effective_action_url")),
-                          "relations":button.get("relations")})
+        if (
+            button.get("form_id")
+            and button.get("type") in {"submit", "image"}
+            and not button.get("disabled")
+            and button.get("effective_method") == "post"
+        ):
+            posts.append(
+                {
+                    "form_id": button["form_id"],
+                    "button_id": button["button_id"],
+                    "action_url": button.get("effective_action_url"),
+                    "action_etld1": etld1(button.get("effective_action_url")),
+                    "relations": button.get("relations"),
+                }
+            )
     if not posts:
         return signal_result(
             "L3-H-04",
@@ -60,23 +70,32 @@ def analyze(
         and policy.credential_classifier is not None
         and not classification_error
     )
-    current = etld1(document_url)
     observations = []
     for form in posts:
         destination = form.get("action_etld1")
-        relations = form.get("relations") or url_relations(document_url, form.get("action_url"))
-        external = None if relations.get("same_site_scope") is None else not relations["same_site_scope"]
+        relations = form.get("relations") or url_relations(
+            document_url, form.get("action_url")
+        )
+        external = (
+            None
+            if relations.get("same_site_scope") is None
+            else not relations["same_site_scope"]
+        )
         observations.append(
             {
                 "form_id": form.get("form_id"),
-                "button_id":form.get("button_id"),
-                "relations":relations,
-                "execution_observed":False,
+                "button_id": form.get("button_id"),
+                "relations": relations,
+                "execution_observed": False,
                 "destination_url": form.get("action_url"),
                 "destination_etld1": destination,
                 "external": external,
                 "credential_form": (
-                    True if form.get("form_id") in credential_forms else False if credential_known else None
+                    True
+                    if form.get("form_id") in credential_forms
+                    else False
+                    if credential_known
+                    else None
                 ),
             }
         )

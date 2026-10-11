@@ -97,7 +97,12 @@ def analyze(
     if evaluator is None:
         limitations.append({"code": "brand_resource_evaluator_not_configured"})
     elif not callable(evaluator):
-        limitations.append({"code": "brand_resource_evaluator_invalid", "configured_type": type(evaluator).__name__})
+        limitations.append(
+            {
+                "code": "brand_resource_evaluator_invalid",
+                "configured_type": type(evaluator).__name__,
+            }
+        )
     if callable(evaluator):
         try:
             decision = evaluator(evidence)
@@ -105,7 +110,12 @@ def analyze(
             if decision is None:
                 limitations.append({"code": "brand_resource_evaluator_abstained"})
             elif not isinstance(decision, bool):
-                limitations.append({"code": "brand_resource_evaluator_invalid_result", "returned_type": type(decision).__name__})
+                limitations.append(
+                    {
+                        "code": "brand_resource_evaluator_invalid_result",
+                        "returned_type": type(decision).__name__,
+                    }
+                )
         except Exception as exc:
             error = {
                 "code": "brand_resource_policy_error",

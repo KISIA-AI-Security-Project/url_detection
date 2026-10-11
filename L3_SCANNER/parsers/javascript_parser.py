@@ -14,7 +14,10 @@ from L3_SCANNER.parsers.javascript.analyzer import StaticAnalyzer
 from L3_SCANNER.parsers.javascript.ast import parse_source, parser_available, walk
 from L3_SCANNER.parsers.javascript.limits import enforce_event_limit
 from L3_SCANNER.parsers.javascript.metadata import credential_fields, script_metadata
-from L3_SCANNER.parsers.javascript.static_data import collect_literal_declarations, collect_json_data
+from L3_SCANNER.parsers.javascript.static_data import (
+    collect_literal_declarations,
+    collect_json_data,
+)
 from L3_SCANNER.parsers.javascript.request_context import enrich_request_context
 from L3_SCANNER.policies.detection import DetectionPolicy
 from L3_SCANNER.policies.runtime import RuntimeConfig
@@ -36,38 +39,62 @@ def parse_javascript(
     active_policy = policy or DetectionPolicy()
     active_runtime = runtime or RuntimeConfig()
     from L3_SCANNER.analyzers.credential_classification import classification_result
-    prepared_html=dict(html_raw or {})
-    classification=classification_result(prepared_html,active_policy)
-    prepared_html['credential_classification']=classification
+
+    prepared_html = dict(html_raw or {})
+    classification = classification_result(prepared_html, active_policy)
+    prepared_html["credential_classification"] = classification
     fields = credential_fields(prepared_html, active_policy)
     raw["analysis"] = _analysis_metadata(scan_input, active_policy)
-    raw['analysis']['credential_classification_state']=classification['state']
-    raw['errors'].extend(classification['errors'])
-    if classification['errors']:raw['analysis']['semantic_complete']=False
+    raw["analysis"]["credential_classification_state"] = classification["state"]
+    raw["errors"].extend(classification["errors"])
+    if classification["errors"]:
+        raw["analysis"]["semantic_complete"] = False
 
-    global_variables = {}
-    global_functions = {}
+    global_variables: dict[str, Any] = {}
+    global_functions: dict[str, Any] = {}
     for script in scan_input.scripts:
         metadata = script_metadata(script)
         raw["scripts"].append(metadata)
-        decoding_errors=[e for e in script.collection_errors if e.get('code') in {'decoding_loss','unknown_encoding'}]
+        decoding_errors = [
+            e
+            for e in script.collection_errors
+            if e.get("code") in {"decoding_loss", "unknown_encoding"}
+        ]
         if decoding_errors:
-            raw['analysis']['decoding_complete']=False
-            raw['analysis']['source_complete']=False
-            raw['errors'].extend({**e,'script_id':script.script_id} for e in decoding_errors)
+            raw["analysis"]["decoding_complete"] = False
+            raw["analysis"]["source_complete"] = False
+            raw["errors"].extend(
+                {**e, "script_id": script.script_id} for e in decoding_errors
+            )
         media_type = (script.media_type or "").split(";", 1)[0].strip().lower()
-        if media_type not in {"", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript", "module"}:
+        if media_type not in {
+            "",
+            "text/javascript",
+            "application/javascript",
+            "text/ecmascript",
+            "application/ecmascript",
+            "module",
+        }:
             metadata["analysis_status"] = "data_block"
             if media_type in {"application/json", "application/ld+json"}:
                 collect_json_data(raw, script, active_runtime.max_script_bytes)
             continue
-        ordered = not script.async_script and not script.defer_script and media_type != "module"
+        ordered = (
+            not script.async_script
+            and not script.defer_script
+            and media_type != "module"
+        )
         if not ordered:
             global_variables.clear()
             global_functions.clear()
             raw["analysis"]["semantic_complete"] = False
-            raw["errors"].append({"code":"script_order_unresolved", "script_id":script.script_id,
-                                  "message":"Module/async/defer binding and execution order not established"})
+            raw["errors"].append(
+                {
+                    "code": "script_order_unresolved",
+                    "script_id": script.script_id,
+                    "message": "Module/async/defer binding and execution order not established",
+                }
+            )
         if script.source is None:
             global_variables.clear()
             global_functions.clear()
@@ -115,16 +142,18 @@ def parse_javascript(
             policy=active_policy,
             credential_fields=fields,
         )
-        analyzer.effective_base_url = (html_raw or {}).get("document", {}).get("effective_base_url") or scan_input.document_url
+        analyzer.effective_base_url = (html_raw or {}).get("document", {}).get(
+            "effective_base_url"
+        ) or scan_input.document_url
         if ordered:
             analyzer.variables = global_variables
             analyzer.functions = global_functions
-        analyzed_all_nodes=True
+        analyzed_all_nodes = True
         try:
             analyzer.analyze(tree)
             enrich_request_context(raw, script, tree)
         except (ValueError, RecursionError) as exc:
-            analyzed_all_nodes=False
+            analyzed_all_nodes = False
             analyzer._limitation("javascript_analysis_limit", str(exc))
         if ordered and not script.truncated and analyzed_all_nodes:
             global_variables, global_functions = analyzer.variables, analyzer.functions

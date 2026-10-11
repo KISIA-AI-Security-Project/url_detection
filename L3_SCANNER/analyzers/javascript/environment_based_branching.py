@@ -29,7 +29,10 @@ def analyze(
                 qualifying.append((event, normalized))
 
     evidence = {
-        'branch_comparisons':[{'event':event,'normalized_behaviors':normalized} for event,normalized in qualifying],
+        "branch_comparisons": [
+            {"event": event, "normalized_behaviors": normalized}
+            for event, normalized in qualifying
+        ],
         "properties": unique(
             [prop for event, _ in qualifying for prop in event.get("properties", [])]
         ),

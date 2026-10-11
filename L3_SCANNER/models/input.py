@@ -73,7 +73,7 @@ class ScriptInput:
             media_type=value.get("media_type"),
             async_script=bool(value.get("async_script", False)),
             defer_script=bool(value.get("defer_script", False)),
-            response=dict(value.get('response',{})),
+            response=dict(value.get("response", {})),
         )
 
 

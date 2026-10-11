@@ -49,11 +49,19 @@ class Eval:
 
     def current_taints(self, seen=None):
         """Read current object members, not a snapshot from object construction."""
-        if self.properties is None: return list(self.taints)
-        seen=set() if seen is None else seen
-        if id(self) in seen: return []
+        if self.properties is None:
+            return list(self.taints)
+        seen = set() if seen is None else seen
+        if id(self) in seen:
+            return []
         seen.add(id(self))
-        return unique_taints([taint for value in self.properties.values() for taint in value.current_taints(seen)])
+        return unique_taints(
+            [
+                taint
+                for value in self.properties.values()
+                for taint in value.current_taints(seen)
+            ]
+        )
 
 
 def unique_taints(values: list[Taint]) -> list[Taint]:

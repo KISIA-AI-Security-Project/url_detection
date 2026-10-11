@@ -31,15 +31,23 @@ def analyze(
         )
     fields, error = classify_fields(raw, policy)
     from L3_SCANNER.analyzers.credential_classification import classification_result
+
     evidence = {
-        'field_observations':classification_result(raw,policy)['fields'],
+        "field_observations": classification_result(raw, policy)["fields"],
         "field_count": len(fields),
         "field_types": sorted({field["credential_type"] for field in fields}),
         "fields": fields,
     }
     if error:
-        return signal_result('L3-H-02','html','credential_field',status='evaluated' if fields else 'error',
-            detected=True if fields else None,evidence=evidence,error=error)
+        return signal_result(
+            "L3-H-02",
+            "html",
+            "credential_field",
+            status="evaluated" if fields else "error",
+            detected=True if fields else None,
+            evidence=evidence,
+            error=error,
+        )
     if policy is None or policy.credential_classifier is None:
         return signal_result(
             "L3-H-02",

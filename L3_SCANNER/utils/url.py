@@ -83,22 +83,47 @@ def registrable_domain_label(value: str | None) -> str | None:
     return extracted.domain or None
 
 
-_PRIVATE_EXTRACT = tldextract.TLDExtract(suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True)
+_PRIVATE_EXTRACT = tldextract.TLDExtract(
+    suffix_list_urls=(), cache_dir=None, include_psl_private_domains=True
+)
+
 
 def site_scope(value: str | None) -> str | None:
     """공유 호스팅의 이용자 단위를 보존한다. 실제 조직 소유권을 주장하지 않는다."""
-    if not is_http_url(value): return None
-    hostname = urlsplit(value).hostname
-    try: return str(ipaddress.ip_address(hostname))
-    except ValueError: pass
+    if not is_http_url(value):
+        return None
+    hostname = cast(str, urlsplit(cast(str, value)).hostname)
+    try:
+        return str(ipaddress.ip_address(hostname))
+    except ValueError:
+        pass
     name = hostname.encode("idna").decode("ascii").lower().rstrip(".")
     return _PRIVATE_EXTRACT(name).top_domain_under_public_suffix or name
 
+
 def url_relations(source, destination):
     if not is_http_url(source) or not is_http_url(destination):
-        return {"same_origin":None, "same_host":None, "same_site_scope":None, "ownership":"unverified"}
+        return {
+            "same_origin": None,
+            "same_host": None,
+            "same_site_scope": None,
+            "ownership": "unverified",
+        }
     a, b = urlsplit(source), urlsplit(destination)
-    def origin(x): return (x.scheme.lower(), x.hostname.encode("idna").decode("ascii").lower().rstrip("."), x.port or (443 if x.scheme.lower()=="https" else 80))
-    return {"same_origin":origin(a)==origin(b), "same_host":origin(a)[1]==origin(b)[1],
-            "same_icann_domain":etld1(source)==etld1(destination) if etld1(source) and etld1(destination) else None,
-            "same_site_scope":site_scope(source)==site_scope(destination), "ownership":"unverified"}
+
+    def origin(x):
+        return (
+            x.scheme.lower(),
+            x.hostname.encode("idna").decode("ascii").lower().rstrip("."),
+            x.port or (443 if x.scheme.lower() == "https" else 80),
+        )
+
+    return {
+        "same_origin": origin(a) == origin(b),
+        "same_host": origin(a)[1] == origin(b)[1],
+        "same_icann_domain": etld1(source) == etld1(destination)
+        if etld1(source) and etld1(destination)
+        else None,
+        "same_site_scope": site_scope(source) == site_scope(destination),
+        "ownership": "unverified",
+    }

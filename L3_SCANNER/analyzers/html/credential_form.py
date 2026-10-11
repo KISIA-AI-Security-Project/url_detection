@@ -35,8 +35,15 @@ def analyze(
     )
     evidence = {"form_count": len(form_ids), "form_ids": form_ids}
     if error:
-        return signal_result('L3-H-01','html','credential_form',status='evaluated' if form_ids else 'error',
-            detected=True if form_ids else None,evidence=evidence,error=error)
+        return signal_result(
+            "L3-H-01",
+            "html",
+            "credential_form",
+            status="evaluated" if form_ids else "error",
+            detected=True if form_ids else None,
+            evidence=evidence,
+            error=error,
+        )
     if policy is None or policy.credential_classifier is None:
         return signal_result(
             "L3-H-01",

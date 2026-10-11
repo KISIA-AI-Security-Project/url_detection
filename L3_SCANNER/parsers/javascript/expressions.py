@@ -5,11 +5,9 @@
 """
 
 from typing import Any
-from copy import deepcopy
-from urllib.parse import urlsplit
 
 from L3_SCANNER.utils.url import resolve_http_url
-from .ast import callee_path, identifier_name, matches_api, member_path, property_name
+from .ast import identifier_name, matches_api, member_path, property_name
 from .base import AnalyzerBase
 from .models import Element, Eval, Taint
 
@@ -33,7 +31,21 @@ class ExpressionMixin(AnalyzerBase):
             return self._eval_template(node)
         if kind == "Identifier":
             name = str(node.get("name"))
-            return self.variables.get(name, Eval(api=name) if name in {"fetch", "XMLHttpRequest", "navigator", "window", "globalThis", "document", "location"} else Eval())
+            return self.variables.get(
+                name,
+                Eval(api=name)
+                if name
+                in {
+                    "fetch",
+                    "XMLHttpRequest",
+                    "navigator",
+                    "window",
+                    "globalThis",
+                    "document",
+                    "location",
+                }
+                else Eval(),
+            )
         if kind in {"CallExpression", "NewExpression"}:
             return self._eval_call(node)
         if kind == "MemberExpression":
@@ -44,19 +56,28 @@ class ExpressionMixin(AnalyzerBase):
             return value
         if kind in {"BinaryExpression", "LogicalExpression"}:
             return self._eval_binary(node)
-        if kind == 'UnaryExpression' and node.get('operator') == 'delete':
-            target=node.get('argument') or {}
-            if target.get('type') == 'MemberExpression':
-                obj=self._eval_expr(target.get('object'))
-                key=self._property_key(target)
+        if kind == "UnaryExpression" and node.get("operator") == "delete":
+            target = node.get("argument") or {}
+            if target.get("type") == "MemberExpression":
+                obj = self._eval_expr(target.get("object"))
+                key = self._property_key(target)
                 if obj.properties is not None:
                     if key is None:
-                        obj.properties=None;obj.taints=[]
-                        self._limitation('object_write_unresolved', 'Unknown delete key; previous object member relationships invalidated', node)
+                        obj.properties = None
+                        obj.taints = []
+                        self._limitation(
+                            "object_write_unresolved",
+                            "Unknown delete key; previous object member relationships invalidated",
+                            node,
+                        )
                     else:
-                        obj.properties.pop(key,None)
+                        obj.properties.pop(key, None)
                 else:
-                    self._limitation('object_write_unresolved', 'Delete target is not statically resolved', node)
+                    self._limitation(
+                        "object_write_unresolved",
+                        "Delete target is not statically resolved",
+                        node,
+                    )
             else:
                 self._eval_expr(target)
             return Eval()
@@ -78,30 +99,46 @@ class ExpressionMixin(AnalyzerBase):
             )
         if kind == "SequenceExpression":
             value = Eval()
-            for item in node.get('expressions', []):
+            for item in node.get("expressions", []):
                 value = self._eval_expr(item)
             return value
         if kind == "ArrayExpression":
-            value=self._combine(self._eval_expr(item) for item in node.get('elements', []))
-            value.container_kind='array'
+            value = self._combine(
+                self._eval_expr(item) for item in node.get("elements", [])
+            )
+            value.container_kind = "array"
             return value
         if kind == "ObjectExpression":
             properties = {}
             known = True
-            for item in node.get('properties', []):
-                key = item.get('key') or {}
-                name = key.get('value') if key.get('type') == 'Literal' else key.get('name') if not item.get('computed') else None
-                value = self._eval_expr(item.get('value') or item.get('argument'))
-                if item.get('type') != 'Property' or name is None or item.get('kind', 'init') != 'init':
+            for item in node.get("properties", []):
+                key = item.get("key") or {}
+                property_key = (
+                    key.get("value")
+                    if key.get("type") == "Literal"
+                    else key.get("name")
+                    if not item.get("computed")
+                    else None
+                )
+                value = self._eval_expr(item.get("value") or item.get("argument"))
+                if (
+                    item.get("type") != "Property"
+                    or property_key is None
+                    or item.get("kind", "init") != "init"
+                ):
                     known = False
                 else:
-                    properties[str(name)] = value
+                    properties[str(property_key)] = value
             result = self._combine(properties.values())
             result.properties = properties if known else None
-            result.container_kind = 'object'
+            result.container_kind = "object"
             if not known:
                 result.taints = []
-                self._limitation('object_structure_unresolved', 'Object spread, dynamic keys or accessors are not resolved; no member payload relationship asserted', node)
+                self._limitation(
+                    "object_structure_unresolved",
+                    "Object spread, dynamic keys or accessors are not resolved; no member payload relationship asserted",
+                    node,
+                )
             return result
         if kind in {"FunctionExpression", "ArrowFunctionExpression"}:
             self._process_function(node)
@@ -131,11 +168,18 @@ class ExpressionMixin(AnalyzerBase):
         if not left.taints and not right.taints:
             if left.literal is not None and right.literal is not None:
                 if node.get("operator") == "+":
-                    if isinstance(left.literal, (int, float)) and isinstance(right.literal, (int, float)):
+                    if isinstance(left.literal, (int, float)) and isinstance(
+                        right.literal, (int, float)
+                    ):
                         return Eval(literal=left.literal + right.literal)
                     if isinstance(left.literal, str) or isinstance(right.literal, str):
-                        def js_string(v): return str(v).lower() if isinstance(v, bool) else str(v)
-                        return Eval(literal=js_string(left.literal) + js_string(right.literal))
+
+                        def js_string(v):
+                            return str(v).lower() if isinstance(v, bool) else str(v)
+
+                        return Eval(
+                            literal=js_string(left.literal) + js_string(right.literal)
+                        )
         value = self._combine((left, right))
         if node.get("operator") == "+" and isinstance(left.literal, str):
             value.url_prefix = left.literal
@@ -161,18 +205,28 @@ class ExpressionMixin(AnalyzerBase):
                 self.raw["environment_access"].append(event)
         if obj.properties is not None:
             if property_value is None:
-                self._limitation('object_read_unresolved', 'Computed object member is unresolved; no value relationship asserted', node)
+                self._limitation(
+                    "object_read_unresolved",
+                    "Computed object member is unresolved; no value relationship asserted",
+                    node,
+                )
                 return Eval()
             return obj.properties.get(property_value, Eval())
-        if property_value == "value" and obj.element and obj.element.field and obj.element.field.get('credential_type'):
+        if (
+            property_value == "value"
+            and obj.element
+            and obj.element.field
+            and obj.element.field.get("credential_type")
+        ):
             return self._credential_value(node, obj.element.field)
         return Eval(taints=obj.current_taints(), element=obj.element, api=path)
 
     def _property_key(self, node):
         key = property_name(node)
-        if key is None and node.get('computed'):
-            value = self._eval_expr(node.get('property')).literal
-            if isinstance(value, (str, int, float)): key = str(value)
+        if key is None and node.get("computed"):
+            value = self._eval_expr(node.get("property")).literal
+            if isinstance(value, (str, int, float)):
+                key = str(value)
         return key
 
     def _eval_call(self, node: dict[str, Any]) -> Eval:
@@ -194,10 +248,20 @@ class ExpressionMixin(AnalyzerBase):
             if obj.api == "XMLHttpRequestInstance":
                 if method == "open":
                     obj.request.clear()
-                    obj.request.update({"destination": arguments[1] if len(arguments)>1 else Eval(),
-                                        "method":arguments[0].literal if arguments else None})
+                    obj.request.update(
+                        {
+                            "destination": arguments[1]
+                            if len(arguments) > 1
+                            else Eval(),
+                            "method": arguments[0].literal if arguments else None,
+                        }
+                    )
                 elif method == "send" and self.policy.network_apis:
-                    self._record_network(node,"XMLHttpRequest.send",[obj.request.get("destination", Eval()), *arguments])
+                    self._record_network(
+                        node,
+                        "XMLHttpRequest.send",
+                        [obj.request.get("destination", Eval()), *arguments],
+                    )
                 return Eval()
         call_result = self._combine(arguments)
 
@@ -327,23 +391,34 @@ class ExpressionMixin(AnalyzerBase):
             return Element()
         selector = arguments[0].literal
         if api == "document.getElementById":
-            return Element(field=self.credential_fields.get("id:"+selector))
+            return Element(field=self.credential_fields.get("id:" + selector))
         if api == "document.getElementsByName":
             # 컬렉션의 .value를 단일 필드처럼 취급하지 않는다. 인덱스 지원은 별도 한계다.
-            self._limitation("dom_collection_unresolved", "getElementsByName returns a collection; element selection not modeled")
+            self._limitation(
+                "dom_collection_unresolved",
+                "getElementsByName returns a collection; element selection not modeled",
+            )
             return Element()
         if api == "document.querySelector":
             import re
+
             if re.fullmatch(r"#[a-zA-Z_][\w-]*", selector):
-                return Element(field=self.credential_fields.get("id:"+selector[1:]))
+                return Element(field=self.credential_fields.get("id:" + selector[1:]))
             match = re.fullmatch(r"(?:input)?\[name=[\"']?([\w-]+)[\"']?\]", selector)
             if match:
-                prefix = 'input-name:' if selector.startswith('input[') else 'name:'
-                return Element(field=self.credential_fields.get(prefix+match.group(1)))
+                prefix = "input-name:" if selector.startswith("input[") else "name:"
+                return Element(
+                    field=self.credential_fields.get(prefix + match.group(1))
+                )
             # 'password'는 태그 선택자다. 같은 이름의 id에 연결할 근거가 없다.
             if re.fullmatch(r"[a-zA-Z][\w-]*", selector):
-                return Element(field=self.credential_fields.get('tag:'+selector.lower()))
-            self._limitation("css_selector_unresolved", "Unsupported CSS selector; no field relationship asserted")
+                return Element(
+                    field=self.credential_fields.get("tag:" + selector.lower())
+                )
+            self._limitation(
+                "css_selector_unresolved",
+                "Unsupported CSS selector; no field relationship asserted",
+            )
         return Element()
 
     def _credential_value(self, node: dict[str, Any], field: dict[str, Any]) -> Eval:
@@ -379,14 +454,18 @@ class ExpressionMixin(AnalyzerBase):
         if name:
             self.variables[name] = value
             return
-        if isinstance(target, dict) and target.get('type') == 'MemberExpression':
-            obj_value = self._eval_expr(target.get('object'))
+        if isinstance(target, dict) and target.get("type") == "MemberExpression":
+            obj_value = self._eval_expr(target.get("object"))
             if obj_value.properties is not None:
                 prop = self._property_key(target)
                 if prop is None:
                     obj_value.properties = None
                     obj_value.taints = []
-                    self._limitation('object_write_unresolved', 'Unknown object property write; previous member relationships invalidated', node)
+                    self._limitation(
+                        "object_write_unresolved",
+                        "Unknown object property write; previous member relationships invalidated",
+                        node,
+                    )
                 else:
                     obj_value.properties[prop] = value
                 return

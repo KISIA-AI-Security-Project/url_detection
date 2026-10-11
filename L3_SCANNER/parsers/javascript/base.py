@@ -35,8 +35,8 @@ class AnalyzerBase:
         self.variables: dict[str, Eval] = {}
         self.functions: dict[str, Any] = {}
         self.call_depth = 0
-        self.call_context = []
-        self.control_context = []
+        self.call_context: list[str] = []
+        self.control_context: list[dict[str, Any]] = []
         self.node_visits = 0
         self.max_node_visits = 100_000
         self.effective_base_url = document_url
@@ -49,11 +49,21 @@ class AnalyzerBase:
         self.raw["analysis"]["semantic_complete"] = False
         if code == "javascript_analysis_limit":
             self.raw["analysis"]["source_complete"] = False
-        if not any(e.get("code") == code and e.get("script_id") == self.script.script_id for e in self.raw["errors"]):
-            detail={"code":code,"script_id":self.script.script_id,"message":message}
+        if not any(
+            e.get("code") == code and e.get("script_id") == self.script.script_id
+            for e in self.raw["errors"]
+        ):
+            detail = {
+                "code": code,
+                "script_id": self.script.script_id,
+                "message": message,
+            }
             if node is not None:
-                span=node.get('range') or [0,0]
-                detail.update(source_range=span,source_excerpt=self.source[span[0]:span[1]][:300])
+                span = node.get("range") or [0, 0]
+                detail.update(
+                    source_range=span,
+                    source_excerpt=self.source[span[0] : span[1]][:300],
+                )
             self.raw["errors"].append(detail)
 
     def _visit(self):
@@ -63,12 +73,14 @@ class AnalyzerBase:
 
     def _resolve_api(self, node):
         from .ast import callee_path
+
         path = callee_path(node)
-        if not path: return None
+        if not path:
+            return None
         root = path.split(".")[0]
         if root in self.variables:
             alias = self.variables[root].api
-            return alias + path[len(root):] if alias else None
+            return alias + path[len(root) :] if alias else None
         if path.startswith(("window.", "globalThis.")):
             return path.split(".", 1)[1]
         return path
@@ -77,7 +89,7 @@ class AnalyzerBase:
         """Source 범위를 우선 사용해 재현 가능한 이벤트 식별자를 만든다."""
         span = node.get("range") or []
         if len(span) == 2:
-            suffix = ':' + ':'.join(self.call_context) if self.call_context else ''
+            suffix = ":" + ":".join(self.call_context) if self.call_context else ""
             return f"{self.script.script_id}:{kind}:{span[0]}-{span[1]}{suffix}"
         self._sequence += 1
         return f"{self.script.script_id}:{kind}:{self._sequence}"
@@ -93,7 +105,9 @@ class AnalyzerBase:
             "call_context": list(self.call_context),
             "control_context": [dict(x) for x in self.control_context],
             "source_range": list(node.get("range") or []),
-            "source_excerpt": self.source[(node.get("range") or [0,0])[0]:(node.get("range") or [0,0])[1]][:300],
+            "source_excerpt": self.source[
+                (node.get("range") or [0, 0])[0] : (node.get("range") or [0, 0])[1]
+            ][:300],
         }
 
     @staticmethod
@@ -137,6 +151,20 @@ class AnalyzerBase:
 
     def _eval_expr(self, node: Any) -> Eval:
         """표현식의 제한적 정적 값을 계산하는 조합 훅."""
+        raise NotImplementedError
+
+    def _process_function(self, node: Any, arguments: list[Eval] | None = None) -> Eval:
+        """함수 본문과 연결된 인자를 처리하는 조합 훅."""
+        raise NotImplementedError
+
+    def _call_function(
+        self,
+        binding: Any,
+        arguments: list[Eval],
+        call_node: Any,
+        declaration: bool = False,
+    ) -> Eval:
+        """호출 문맥을 보존하며 함수 분석을 수행하는 조합 훅."""
         raise NotImplementedError
 
     def _record_network(

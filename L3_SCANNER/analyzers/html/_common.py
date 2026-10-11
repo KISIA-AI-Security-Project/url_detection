@@ -18,7 +18,7 @@ def fatal_html_error(raw: Mapping[str, Any]) -> dict[str, Any] | None:
         return None
     errors = list(raw.get("errors", []))
     return (
-        {"code":"html_not_parsed","causes":errors}
+        {"code": "html_not_parsed", "causes": errors}
         if errors
         else {"code": "html_not_parsed", "message": "HTML was not parsed"}
     )
@@ -33,11 +33,22 @@ def classify_fields(
     빈 목록과 ``error=None``을 반환하고 호출자가 ``detected=None``을 선택하게 한다.
     """
     from L3_SCANNER.analyzers.credential_classification import classification_result
-    classification=classification_result(raw,policy)
-    fields=[{k:field.get(k) for k in ('field_id','form_id','credential_type')}
-            for field in classification['fields'] if field['state']=='evaluated' and field.get('credential_type')]
-    error={'code':'credential_classification_partial','causes':classification['errors']} if classification['errors'] else None
-    return fields,error
+
+    classification = classification_result(raw, policy)
+    fields = [
+        {k: field.get(k) for k in ("field_id", "form_id", "credential_type")}
+        for field in classification["fields"]
+        if field["state"] == "evaluated" and field.get("credential_type")
+    ]
+    error = (
+        {
+            "code": "credential_classification_partial",
+            "causes": classification["errors"],
+        }
+        if classification["errors"]
+        else None
+    )
+    return fields, error
 
 
 def normalize_expected_domain(value: str) -> str | None:
@@ -120,9 +131,15 @@ def brand_evidence(
         }
         return brand, current_domain, identification, None
     if identified is not None and not isinstance(identified, str):
-        return None, current_domain, identification, {
-            "code": "brand_identifier_invalid_result", "returned_type": type(identified).__name__
-        }
+        return (
+            None,
+            current_domain,
+            identification,
+            {
+                "code": "brand_identifier_invalid_result",
+                "returned_type": type(identified).__name__,
+            },
+        )
     if not identified:
         identification["limitations"] = [{"code": "brand_not_identified"}]
     return (

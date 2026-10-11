@@ -57,11 +57,20 @@ def analyze(
     if configured is None:
         limitations.append({"code": "brand_domain_reference_not_configured"})
     elif brand is not None and brand not in configured:
-        limitations.append({"code": "brand_absent_from_domain_reference", "brand": brand})
+        limitations.append(
+            {"code": "brand_absent_from_domain_reference", "brand": brand}
+        )
     if current is None:
-        limitations.append({"code": "brand_comparison_domain_unresolved", "document_url": document_url})
+        limitations.append(
+            {"code": "brand_comparison_domain_unresolved", "document_url": document_url}
+        )
     detected: bool | None = None
-    if brand is not None and configured is not None and brand in configured and current is not None:
+    if (
+        brand is not None
+        and configured is not None
+        and brand in configured
+        and current is not None
+    ):
         normalized = {
             domain
             for value in expected
@@ -69,7 +78,14 @@ def analyze(
         }
         detected = current not in normalized if normalized else None
         if not normalized:
-            limitations.append({"code": "brand_domain_reference_empty" if not expected else "brand_domain_reference_invalid", "brand": brand})
+            limitations.append(
+                {
+                    "code": "brand_domain_reference_empty"
+                    if not expected
+                    else "brand_domain_reference_invalid",
+                    "brand": brand,
+                }
+            )
     return signal_result(
         "L3-H-05",
         "html",

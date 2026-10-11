@@ -54,7 +54,7 @@ def analyze(
                 if destination is not None and current is not None
                 else None,
                 "action_resolution": form.get("action_resolution"),
-                "relations":form.get("relations"),
+                "relations": form.get("relations"),
             }
         )
     first = observations[0]

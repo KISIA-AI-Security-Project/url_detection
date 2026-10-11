@@ -26,8 +26,11 @@ def output_documents(
     common = {key: result[key] for key in COMMON_OUTPUT_KEYS if key in result}
     return (
         {**common, "raw": result.get("raw", {})},
-        {**common, "signals": result.get("signals", []),
-         "analysis_facts": result.get("analysis_facts", [])},
+        {
+            **common,
+            "signals": result.get("signals", []),
+            "analysis_facts": result.get("analysis_facts", []),
+        },
     )
 
 

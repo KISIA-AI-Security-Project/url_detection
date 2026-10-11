@@ -44,7 +44,9 @@ def analyze(raw: Mapping[str, Any]) -> dict[str, Any]:
             "destination_etld1": None,
             "external": None,
         }
-    evidence['source_sink_relationships']=[{'request':request,'link':link} for request,link in linked]
+    evidence["source_sink_relationships"] = [
+        {"request": request, "link": link} for request, link in linked
+    ]
     policy_resolved = bool(
         raw.get("analysis", {}).get("credential_policy_configured")
     ) and bool(raw.get("analysis", {}).get("network_policy_configured"))

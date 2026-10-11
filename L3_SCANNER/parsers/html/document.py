@@ -53,21 +53,33 @@ def populate_document(raw: dict[str, Any], soup: BeautifulSoup) -> None:
     raw["document"]["title"] = (
         soup.title.get_text(" ", strip=True) if soup.title else None
     )
-    raw["document"]["text_scope"] = "static HTML text excluding explicit hidden nodes; external CSS and runtime visibility unobserved"
+    raw["document"]["text_scope"] = (
+        "static HTML text excluding explicit hidden nodes; external CSS and runtime visibility unobserved"
+    )
     raw["document"]["visible_text"] = " ".join(
         str(node).strip()
         for node in soup.find_all(string=True)
         if isinstance(node, NavigableString)
         and not isinstance(node, (Comment, Doctype, Declaration))
         and node.parent is not None
-        and not any(parent.name in {"script", "style", "template", "noscript", "head"}
-                    or parent.has_attr("hidden")
-                    or _inline_hidden(str(parent.get("style") or ""))
-                    for parent in node.parents if hasattr(parent, "has_attr"))
+        and not any(
+            parent.name in {"script", "style", "template", "noscript", "head"}
+            or parent.has_attr("hidden")
+            or _inline_hidden(str(parent.get("style") or ""))
+            for parent in node.parents
+            if hasattr(parent, "has_attr")
+        )
         and str(node).strip()
     )
 
 
 def _inline_hidden(style: str) -> bool:
     import re
-    return bool(re.search(r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))\s*(?:!important)?\s*(?:;|$)", style, re.I))
+
+    return bool(
+        re.search(
+            r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*(?:hidden|collapse))\s*(?:!important)?\s*(?:;|$)",
+            style,
+            re.I,
+        )
+    )

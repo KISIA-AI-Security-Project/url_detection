@@ -124,7 +124,9 @@ def test_wikidata_sync_builds_cache_and_filters_former_domains() -> None:
 
 
 @pytest.mark.parametrize("reverse_order", [False, True])
-@pytest.mark.parametrize("selected_brand,entity_id", [("AlphaBrand", "Q111"), ("BetaBrand", "Q222")])
+@pytest.mark.parametrize(
+    "selected_brand,entity_id", [("AlphaBrand", "Q111"), ("BetaBrand", "Q222")]
+)
 def test_brand_identity_uses_selected_entry_metadata(
     tmp_path: Path, reverse_order: bool, selected_brand: str, entity_id: str
 ) -> None:
