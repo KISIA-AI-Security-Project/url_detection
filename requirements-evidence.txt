@@ -1,0 +1,4 @@
+-r L2_SCANNER/requirements.txt
+-r L3_SCANNER/requirements.txt
+-r L1/requirements.txt
+-r L0_SCANNER/requirements.txt

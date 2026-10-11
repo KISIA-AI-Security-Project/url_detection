@@ -1,0 +1,128 @@
+{
+  "schema_version": "team5-web-deployment-1",
+  "region": "ap-northeast-2",
+  "account": "998301375101",
+  "roles": {
+    "team5-web-api-role-20261006": {
+      "trust": "lambda.amazonaws.com",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:GetItem",
+              "dynamodb:PutItem",
+              "dynamodb:Query"
+            ],
+            "Resource": [
+              "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-web-jobs-20261006"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "lambda:InvokeFunction"
+            ],
+            "Resource": [
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:Team5-gate:2",
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:Team5-result:4",
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:team5-l4-start-20261006",
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:team5-l4-query-20261006"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "states:StartExecution"
+            ],
+            "Resource": [
+              "arn:aws:states:ap-northeast-2:998301375101:stateMachine:team5-web-vt-20261006"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": [
+              "arn:aws:logs:ap-northeast-2:998301375101:log-group:/aws/lambda/team5-web-api-20261006:*"
+            ]
+          }
+        ]
+      }
+    },
+    "team5-web-vt-role-20261006": {
+      "trust": "lambda.amazonaws.com",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "dynamodb:GetItem",
+              "dynamodb:PutItem"
+            ],
+            "Resource": [
+              "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-web-jobs-20261006"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "secretsmanager:GetSecretValue"
+            ],
+            "Resource": [
+              "arn:aws:secretsmanager:ap-northeast-2:998301375101:secret:team5/web/virustotal-*"
+            ]
+          },
+          {
+            "Effect": "Allow",
+            "Action": [
+              "logs:CreateLogStream",
+              "logs:PutLogEvents"
+            ],
+            "Resource": [
+              "arn:aws:logs:ap-northeast-2:998301375101:log-group:/aws/lambda/team5-web-vt-20261006:*"
+            ]
+          }
+        ]
+      }
+    },
+    "team5-web-vt-states-role-20261006": {
+      "trust": "states.amazonaws.com",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "lambda:InvokeFunction"
+            ],
+            "Resource": [
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:team5-web-vt-20261006",
+              "arn:aws:lambda:ap-northeast-2:998301375101:function:team5-web-vt-20261006:*"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "public_access": {
+    "frontend": "CloudFront HTTPS. Private S3 origin, web/frontend/20261006/* only.",
+    "api": "New Regional REST API; every /api route requires Cognito access JWT and team5-web/analysis scope. Server sends Fast, independent VT and L4 updates through authenticated SSE; the stream function shares the approved Front role and log group.",
+    "existing_fast_api": "Existing CUSTOM token API unchanged; server invokes pinned Gate2/Result4.",
+    "ownership": "New table PK USER#verified-sub, SK JOB#scanId or RUN#run_id; no access to earlier jobs without ownership.",
+    "vt": "Opt-in URL report GET; key stored in Secrets Manager, never client/Git.",
+    "l4": "Only four Fast result identifiers and verified sub sent to named internal start/query Lambdas."
+  },
+  "cognito": {
+    "new_pool": "team5-web-users-20261006",
+    "public_client": "team5-web-front-20261006",
+    "flow": "code + S256 PKCE",
+    "client_secret": false
+  },
+  "verification_account": "One generated QA account; disabled after live proof. No existing human credential is changed.",
+  "rollback": "Disable new CloudFront/API route integration. Existing Fast Lambdas/SFN/EC2 deployment stays pinned."
+}

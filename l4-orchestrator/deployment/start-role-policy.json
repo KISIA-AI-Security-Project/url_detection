@@ -1,0 +1,47 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "OwnedWebJobAndRunLedger",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"],
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-web-jobs-20261006",
+      "Condition": {"ForAllValues:StringLike": {"dynamodb:LeadingKeys": ["USER#*"]}}
+    },
+    {
+      "Sid": "ReadAcceptedFastHandoff",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": [
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/records/a50914*/*/fast/result.json",
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/records/a50914*/*/fast/deep-handoff.json",
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/records/a50914*/*/fast/context.json",
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/records/a50914*/*/fast/judgment.json"
+      ]
+    },
+    {
+      "Sid": "WriteRequestedL4InputAndPendingStatus",
+      "Effect": "Allow",
+      "Action": "s3:PutObject",
+      "Resource": [
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/l4/_runtime/*/request.json",
+        "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/l4/_runtime/*/worker-status.json"
+      ]
+    },
+    {
+      "Sid": "OnlyFixedL4CommandOnApprovedEC2",
+      "Effect": "Allow",
+      "Action": "ssm:SendCommand",
+      "Resource": [
+        "arn:aws:ssm:ap-northeast-2:998301375101:document/Team5-L4Run-20261006",
+        "arn:aws:ec2:ap-northeast-2:998301375101:instance/i-0e6b3623d0a2055e7"
+      ]
+    },
+    {
+      "Sid": "OwnFunctionLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ap-northeast-2:998301375101:log-group:/aws/lambda/team5-l4-start-20261006:*"
+    }
+  ]
+}

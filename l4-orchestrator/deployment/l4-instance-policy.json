@@ -1,0 +1,41 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "L4RecordsOnlyOnApprovedInstance",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"],
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-l4DB",
+      "Condition": {
+        "StringEquals": {
+          "ec2:SourceInstanceARN": "arn:aws:ec2:ap-northeast-2:998301375101:instance/i-0e6b3623d0a2055e7",
+          "aws:RequestedRegion": "ap-northeast-2"
+        }
+      }
+    },
+    {
+      "Sid": "L4ObjectsOnlyOnApprovedInstance",
+      "Effect": "Allow",
+      "Action": ["s3:GetObject", "s3:PutObject"],
+      "Resource": "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/l4/*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:SourceInstanceARN": "arn:aws:ec2:ap-northeast-2:998301375101:instance/i-0e6b3623d0a2055e7",
+          "aws:RequestedRegion": "ap-northeast-2"
+        }
+      }
+    },
+    {
+      "Sid": "ReadL4GatewaySecretOnlyOnApprovedInstance",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:ap-northeast-2:998301375101:secret:team5/l4/monorouter-20261006-*",
+      "Condition": {
+        "StringEquals": {
+          "ec2:SourceInstanceARN": "arn:aws:ec2:ap-northeast-2:998301375101:instance/i-0e6b3623d0a2055e7",
+          "aws:RequestedRegion": "ap-northeast-2"
+        }
+      }
+    }
+  ]
+}

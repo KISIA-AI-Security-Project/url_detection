@@ -1,0 +1,30 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOwnedRunLedger",
+      "Effect": "Allow",
+      "Action": "dynamodb:GetItem",
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-web-jobs-20261006",
+      "Condition": {"ForAllValues:StringLike": {"dynamodb:LeadingKeys": ["USER#*"]}}
+    },
+    {
+      "Sid": "ReadL4DisplayRecords",
+      "Effect": "Allow",
+      "Action": ["dynamodb:GetItem", "dynamodb:Query"],
+      "Resource": "arn:aws:dynamodb:ap-northeast-2:998301375101:table/Team5-l4DB"
+    },
+    {
+      "Sid": "ReadL4BodiesFilesAndWorkerOutcome",
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::team5-evidence-998301375101-ap-northeast-2-an/l4/*"
+    },
+    {
+      "Sid": "OwnFunctionLogs",
+      "Effect": "Allow",
+      "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+      "Resource": "arn:aws:logs:ap-northeast-2:998301375101:log-group:/aws/lambda/team5-l4-query-20261006:*"
+    }
+  ]
+}

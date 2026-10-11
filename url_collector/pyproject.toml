@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "url-collector"
+version = "0.1.0"
+description = "Shared bounded HTTP page collector for the L2/L3 URL scanners"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx==0.28.1",
+    "httpcore==1.0.9",
+]
+
+[tool.setuptools.packages.find]
+where = [".."]
+include = ["url_collector*"]

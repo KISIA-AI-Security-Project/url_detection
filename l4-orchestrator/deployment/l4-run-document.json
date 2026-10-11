@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "2.2",
+  "description": "Run the installed L4 worker for one immutable approved Fast input.",
+  "parameters": {
+    "RunId": {
+      "type": "String",
+      "description": "L4 run identifier bound to the four original Fast identifiers.",
+      "allowedPattern": "^[a-f0-9]{32}$",
+      "interpolationType": "ENV_VAR"
+    }
+  },
+  "mainSteps": [{
+    "action": "aws:runShellScript",
+    "name": "RunRequestedL4",
+    "precondition": {"StringEquals": ["platformType", "Linux"]},
+    "inputs": {
+      "timeoutSeconds": "1800",
+      "runCommand": ["python3 /opt/team5-l4-20261006/service/run_job.py \"$SSM_RunId\""]
+    }
+  }]
+}

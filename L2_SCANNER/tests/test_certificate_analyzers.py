@@ -1,0 +1,331 @@
+"""Certificate Analyzer 8종 단위 테스트 — 가짜 TLS, CT Raw Data 주입, 네트워크 없음."""
+from datetime import datetime, timedelta, timezone
+import pytest
+
+from l2_scanner.analyzers.certificate import (
+    certificate_age,
+    certificate_validity,
+    hostname_match,
+    self_signed,
+    certificate_chain,
+    ct_first_seen,
+    tls_version,
+    wildcard_certificate,
+)
+
+
+def days_ago(days: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
+def days_later(days: int) -> str:
+    return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+
+def make_tls(**overrides) -> dict:
+    """Certificate Collector 출력과 같은 모양의 TLS Raw Data 기본값.
+
+    기본값 = 정상 인증서 (발급 1년 경과, 90일 남음, SAN 일치, CA 발급, 체인 유효)
+    """
+    tls = {
+        "hostname": "www.example.com",
+        "port": 443,
+        "tls_version": "TLSv1.3",
+        "leaf_certificate": {
+            "subject": "CN=www.example.com,O=Example Inc",
+            "issuer": "CN=Example CA,O=CA Corp",
+            "serial_number": "ab12",
+            "fingerprint": "f" * 64,
+            "not_before": days_ago(365),
+            "not_after": days_later(90),
+            "san": ["www.example.com", "example.com"],
+            "sct_timestamps": [days_ago(365)],
+            "self_signed": False,   # Collector가 서명 실검증으로 채우는 필드 (CA 발급 = false)
+        },
+        "certificate_chain": [{"subject": "leaf"}, {"subject": "intermediate"}, {"subject": "root"}],
+        "chain_valid": True,
+        "chain_error": None,
+        "errors": [],
+    }
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(tls.get(key), dict):
+            tls[key].update(value)
+        else:
+            tls[key] = value
+    return tls
+
+
+def no_tls() -> dict:
+    """HTTPS 대상이 없거나 handshake 실패로 인증서를 못 본 경우."""
+    return make_tls(
+        hostname=None, tls_version=None, leaf_certificate=None,
+        certificate_chain=[], chain_valid=None, chain_error=None,
+    )
+
+
+# ---------- L2-C-01 certificate_age ----------
+
+class TestCertificateAge:
+    @pytest.mark.parametrize('days', [2, 15, 29, 30, 31, 45, 365, -3])
+    def test_elapsed_days_have_no_freshness_cutoff(self, monkeypatch, days):
+        now = datetime(2026, 9, 28, 12, tzinfo=timezone.utc)
+        class Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+        monkeypatch.setattr(certificate_age, 'datetime', Clock)
+        start = (now - timedelta(days=days)).isoformat()
+        signal = certificate_age.analyze(make_tls(leaf_certificate={'not_before': start}))
+        assert signal['result_kind'] == 'measurement'
+        assert signal['measurement_state'] == 'observed'
+        assert signal['evidence'] == {'not_before': start, 'measured_at': now.isoformat(), 'age_days': days}
+        assert 'detected' not in signal and 'fresh' not in signal['evidence']
+
+    @pytest.mark.parametrize('leaf', [None, {}, {'not_before': None}])
+    def test_missing_validity_start_is_not_a_negative_measurement(self, leaf):
+        tls = no_tls()
+        tls['leaf_certificate'] = leaf
+        signal = certificate_age.analyze(tls)
+        assert signal['measurement_state'] == 'unavailable'
+        assert signal['evidence']['age_days'] is None
+        assert signal['evidence']['not_before'] is None
+        assert signal['limitations'][0]['code'] == 'certificate_not_before_unavailable'
+        assert 'detected' not in signal and 'fresh' not in signal['evidence']
+
+
+# ---------- L2-C-02 certificate_validity ----------
+
+class TestCertificateValidity:
+    def test_valid(self):
+        signal = certificate_validity.analyze(make_tls())
+        assert signal["detected"] is False
+        assert signal["evidence"]["status"] == "valid"
+
+    def test_expired(self):
+        tls = make_tls(leaf_certificate={"not_before": days_ago(400), "not_after": days_ago(5)})
+        signal = certificate_validity.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["status"] == "expired"
+
+    def test_not_valid_when_not_before_is_future(self):
+        tls = make_tls(leaf_certificate={"not_before": days_later(1), "not_after": days_later(90)})
+        signal = certificate_validity.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["status"] == "not_valid"   # 팀 표기 (노션 L2-C-02 정의)
+
+    def test_unknown_when_no_certificate(self):
+        signal = certificate_validity.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"]["status"] is None
+
+
+# ---------- L2-C-03 hostname_match ----------
+
+class TestHostnameMatch:
+    def test_signal_name_matches_notion_spec(self):
+        # 노션 L2-C-03 페이지의 Signal 예시와 동일한 name이어야 한다
+        assert hostname_match.analyze(make_tls())["name"] == "hostname_certificate_match"
+
+    def test_exact_san_match(self):
+        signal = hostname_match.analyze(make_tls())
+        assert signal["detected"] is False
+        assert signal["evidence"]["matched"] is True
+        assert signal["evidence"]["matched_name"] == "www.example.com"
+
+    def test_wildcard_matches_single_label(self):
+        tls = make_tls(hostname="login.example.com",
+                       leaf_certificate={"san": ["*.example.com"]})
+        assert hostname_match.analyze(tls)["evidence"]["matched"] is True
+
+    def test_wildcard_does_not_match_two_labels(self):
+        tls = make_tls(hostname="a.b.example.com",
+                       leaf_certificate={"san": ["*.example.com"]})
+        signal = hostname_match.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["matched"] is False
+
+    def test_wildcard_does_not_match_bare_domain(self):
+        tls = make_tls(hostname="example.com",
+                       leaf_certificate={"san": ["*.example.com"]})
+        assert hostname_match.analyze(tls)["evidence"]["matched"] is False
+
+    def test_mismatch_detected(self):
+        tls = make_tls(hostname="phish.evil.xyz")
+        signal = hostname_match.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["matched"] is False
+
+    def test_cn_fallback_when_no_san(self):
+        tls = make_tls(leaf_certificate={"san": []})   # 구식 인증서 — CN만 있음
+        signal = hostname_match.analyze(tls)
+        assert signal["evidence"]["matched"] is True
+        assert signal["evidence"]["matched_name"] == "www.example.com"
+
+    def test_case_insensitive(self):
+        tls = make_tls(hostname="WWW.Example.COM")
+        assert hostname_match.analyze(tls)["evidence"]["matched"] is True
+
+    def test_unknown_when_no_certificate(self):
+        signal = hostname_match.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"]["matched"] is None
+
+
+# ---------- L2-C-04 self_signed ----------
+
+class TestSelfSigned:
+    def test_ca_issued_not_detected(self):
+        assert self_signed.analyze(make_tls())["detected"] is False
+
+    def test_self_signed_detected(self):
+        # Collector가 서명 실검증으로 확인한 자체 서명 (팀 리뷰 반영: 이름 비교 아님)
+        same = "CN=myserver,O=Home"
+        tls = make_tls(leaf_certificate={"subject": same, "issuer": same, "self_signed": True})
+        signal = self_signed.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["subject"] == signal["evidence"]["issuer"]
+
+    def test_same_name_but_foreign_signature_not_detected(self):
+        # 이름만 subject==issuer로 꾸미고 실제 서명은 다른 키 — 서명 검증이 걸러낸다
+        same = "CN=myserver,O=Home"
+        tls = make_tls(leaf_certificate={"subject": same, "issuer": same, "self_signed": False})
+        assert self_signed.analyze(tls)["detected"] is False
+
+    def test_unknown_when_verification_impossible(self):
+        # 미지원 알고리즘 등으로 Collector가 검증 못 한 경우 → null 그대로 전달
+        tls = make_tls(leaf_certificate={"self_signed": None})
+        assert self_signed.analyze(tls)["detected"] is None
+
+    def test_unknown_when_no_certificate(self):
+        signal = self_signed.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"subject": None, "issuer": None}
+
+
+# ---------- L2-C-05 certificate_chain ----------
+
+class TestCertificateChain:
+    def test_valid_chain(self):
+        signal = certificate_chain.analyze(make_tls())
+        assert signal["detected"] is False
+        assert signal["evidence"] == {"valid": True, "chain_depth": 3, "error": None}
+
+    def test_invalid_chain_detected(self):
+        tls = make_tls(chain_valid=False,
+                       chain_error="self-signed certificate",
+                       certificate_chain=[{"subject": "leaf"}])
+        signal = certificate_chain.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"] == {
+            "valid": False, "chain_depth": 1, "error": "self-signed certificate",
+        }
+
+    def test_unknown_when_tls_failed(self):
+        signal = certificate_chain.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"valid": None, "chain_depth": None, "error": None}
+
+
+# ---------- L2-C-06 ct_first_seen ----------
+
+def make_ct(**overrides) -> dict:
+    """CT Collector 출력과 같은 모양의 CT Raw Data 기본값 (1년 전 관측 = 정상 인증서)."""
+    ct = {
+        "fingerprint": "f" * 64,
+        "first_seen": days_ago(365),
+        "source": "embedded_sct",
+        "sct_count": 2,
+        "log_entries": None,
+        "errors": [],
+    }
+    ct.update(overrides)
+    return ct
+
+
+class TestCtFirstSeen:
+    def test_old_first_seen_is_measured(self):
+        signal = ct_first_seen.analyze(make_ct())
+        assert signal['measurement_state'] == 'observed' and 'detected' not in signal
+        assert signal["evidence"]["age_days"] >= 364
+        assert 'fresh' not in signal['evidence']
+
+    def test_recent_first_seen_is_measured_without_threshold(self):
+        signal = ct_first_seen.analyze(make_ct(first_seen=days_ago(2)))
+        assert signal['measurement_state'] == 'observed' and 'detected' not in signal
+        assert signal["evidence"]["age_days"] == 2
+        assert signal['evidence']['source'] == 'embedded_sct'
+        assert signal['evidence']['measured_at']
+
+    def test_unknown_when_lookup_failed(self):
+        # SCT 없음 + crt.sh 조회 실패 — unknown ≠ fresh, evidence는 정직하게 null
+        signal = ct_first_seen.analyze(make_ct(
+            first_seen=None, source=None, sct_count=0, log_entries=None,
+            errors=[{"host": "crt.sh", "error": "crt.sh returned HTTP 502"}],
+        ))
+        assert signal['measurement_state'] == 'unavailable' and 'detected' not in signal
+        assert signal['evidence']['first_seen'] is None and signal['evidence']['age_days'] is None
+
+    def test_not_in_ct_reports_unknown_age(self):
+        # SCT 없음 + crt.sh 조회는 성공했으나 CT에 없음 — first_seen이 없으니 age는 unknown
+        signal = ct_first_seen.analyze(make_ct(
+            first_seen=None, source=None, sct_count=0, log_entries=0))
+        assert signal['measurement_state'] == 'unavailable' and 'detected' not in signal
+        assert signal['evidence']['first_seen'] is None and signal['evidence']['age_days'] is None
+
+    def test_future_first_seen_keeps_signed_elapsed_days(self):
+        signal = ct_first_seen.analyze(make_ct(first_seen=days_later(3)))
+        assert signal['measurement_state'] == 'observed' and 'detected' not in signal
+        assert signal['evidence']['age_days'] < 0 and 'fresh' not in signal['evidence']
+
+
+# ---------- L2-C-07 tls_version ----------
+
+class TestTlsVersion:
+    def test_modern_version_is_false(self):
+        signal = tls_version.analyze(make_tls())   # 기본값 TLSv1.3
+        assert signal["detected"] is False
+        assert signal["evidence"] == {"tls_version": "TLSv1.3", "legacy": False}
+
+    def test_legacy_versions_detected(self):
+        # RFC 8996 폐기 대상 (1.1 이하) 전부 true
+        for version in ("SSLv3", "TLSv1", "TLSv1.1"):
+            signal = tls_version.analyze(make_tls(tls_version=version))
+            assert signal["detected"] is True, version
+            assert signal["evidence"]["tls_version"] == version
+
+    def test_tls12_is_not_legacy(self):
+        assert tls_version.analyze(make_tls(tls_version="TLSv1.2"))["detected"] is False
+
+    def test_unknown_when_no_handshake(self):
+        # handshake 실패 = 버전 확인 불가 -> null (확인 안 됨 != 최신)
+        signal = tls_version.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"tls_version": None, "legacy": None}
+
+
+# ---------- L2-C-08 wildcard_certificate ----------
+
+class TestWildcardCertificate:
+    def test_no_wildcard_is_false(self):
+        signal = wildcard_certificate.analyze(make_tls())   # 기본 SAN 2개, 와일드카드 없음
+        assert signal["detected"] is False
+        assert signal["evidence"] == {"wildcard_names": [], "san_count": 2}
+
+    def test_wildcard_detected(self):
+        tls = make_tls(leaf_certificate={"san": ["*.example.com", "example.com"]})
+        signal = wildcard_certificate.analyze(tls)
+        assert signal["detected"] is True
+        assert signal["evidence"]["wildcard_names"] == ["*.example.com"]
+        assert signal["evidence"]["san_count"] == 2
+
+    def test_empty_san_is_false(self):
+        # 인증서는 봤는데 SAN이 비어 있음 -> 검사했고 와일드카드 미관측 = false
+        signal = wildcard_certificate.analyze(make_tls(leaf_certificate={"san": []}))
+        assert signal["detected"] is False
+        assert signal["evidence"]["san_count"] == 0
+
+    def test_unknown_when_no_certificate(self):
+        # 인증서를 못 봤으면 판정 불가 -> null (확인 안 됨 != 와일드카드 없음)
+        signal = wildcard_certificate.analyze(no_tls())
+        assert signal["detected"] is None
+        assert signal["evidence"] == {"wildcard_names": [], "san_count": None}

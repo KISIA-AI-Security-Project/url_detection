@@ -1,0 +1,22 @@
+name: Web boundary
+on:
+  pull_request:
+  push:
+    branches: [main, feature/service-front-20261006]
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Web ownership and VT independence
+        run: python -m unittest discover -s tests -p test_web_service.py
+      - name: SSE and active request
+        run: node --test tests/web-service-client.test.mjs tests/web-stream.test.mjs tests/web-deep-progress.test.mjs

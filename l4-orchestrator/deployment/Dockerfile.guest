@@ -1,0 +1,11 @@
+FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /opt/l4
+COPY pyproject.toml ./
+COPY src ./src
+RUN pip install --no-cache-dir --no-deps . && pip install --no-cache-dir 'playwright==1.63.0' 'pydantic==2.13.5'
+RUN if ! id pwuser >/dev/null 2>&1; then useradd --create-home --uid 1200 pwuser; fi
+COPY deployment/guest_server.py deployment/browser_server.cjs deployment/runtime-config.json /opt/l4/
+USER pwuser
+WORKDIR /work/artifacts
+CMD ["python", "/opt/l4/guest_server.py"]

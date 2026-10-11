@@ -1,0 +1,7 @@
+{
+  "name": "l4-element-observation-build",
+  "private": true,
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "dom-accessibility-api": "0.7.1" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

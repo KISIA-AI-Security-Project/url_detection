@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="웹 주소의 분석 결과와 그 이유를 쉽게 확인합니다.">
+<title>URL 분석 · Team5</title><link rel="stylesheet" href="theme.css">
+<script defer src="fast-result-renderer.js"></script><script type="module" src="app.js"></script>
+</head><body>
+<header class="site-header"><a class="brand" href="/">Team5 · URL 분석</a>
+<nav aria-label="계정"><button id="login" class="secondary" type="button">로그인</button><button id="logout" class="secondary" type="button" hidden>로그아웃</button></nav></header>
+<main class="workspace">
+<section class="introduction"><p class="eyebrow">웹 주소 확인</p><h1>접속하기 전에 확인해 보세요</h1>
+<p>분석 결과와 그 이유를 보여드립니다. 더 확인하고 싶으면 상세 내용이나 심층분석을 열 수 있습니다.</p></section>
+<section class="entry-panel" aria-labelledby="entry-title"><h2 id="entry-title">분석할 웹 주소</h2>
+<form id="analysis-form"><label for="target-url">웹 주소</label><div class="url-input-row">
+<input id="target-url" name="url" type="url" inputmode="url" placeholder="https://example.com" autocomplete="url" required maxlength="2048" aria-describedby="url-help">
+<button id="submit" class="primary" type="submit" disabled>빠른 분석</button></div>
+<p id="url-help" class="subtle-copy">http 또는 https로 시작하는 주소를 입력해 주세요.</p>
+<div class="option-box"><label class="checkbox-label" for="vt-option"><input id="vt-option" type="checkbox"><span>VirusTotal 결과도 함께 조회</span></label>
+<p class="subtle-copy">선택한 웹 주소를 VirusTotal에 보내며, 주소가 외부 공개 자료에 포함될 수 있습니다. 기존 검사 결과를 별도로 보여주고 우리 서비스의 판정에는 사용하지 않습니다.</p></div></form>
+<p id="access-hint" class="subtle-copy">로그인하면 내 분석 결과를 확인할 수 있습니다.</p>
+<p id="request-status" class="request-status" role="status"></p><p id="service-error" class="service-error" role="alert" hidden></p></section>
+<div class="results-layout"><div class="primary-column"><div id="analysis"></div>
+<div id="deep-action" class="deep-action" hidden><div><h2>더 자세히 확인하고 싶나요?</h2>
+<p class="subtle-copy">페이지를 직접 열어 추가로 확인하는 심층분석을 시작합니다.</p></div><button id="start-deep" class="primary" type="button">심층분석</button></div>
+<section id="deep-panel" class="deep-panel" aria-label="심층분석 결과" hidden><h2>심층분석</h2><p id="deep-status" role="status"></p><div id="deep-progress"></div><div id="deep-result"></div></section></div>
+<aside class="secondary-column"><section id="history-panel" class="history-panel" aria-labelledby="history-title" hidden><h2 id="history-title">내 분석 기록</h2><ul id="history-list"></ul></section><div id="virustotal" hidden></div></aside></div>
+<noscript>분석 결과를 확인하려면 브라우저의 JavaScript를 켜 주세요.</noscript></main>
+<footer class="site-footer">Team5 · 교육 프로젝트</footer></body></html>

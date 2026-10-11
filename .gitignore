@@ -1,3 +1,30 @@
-# Local development specifications and agent guidance
-/AGENTS.md
-/docs/L3_SPEC.md
+__pycache__/
+*.py[cod]
+.pytest*/
+.test-cache/
+node_modules/
+.env
+.env.*
+!.env.example
+*.secret
+.secrets/
+.aws/
+web-build/
+web-local-state/
+
+# Local environments, build outputs and evidence stay outside source control.
+.venv/
+venv/
+.test-tmp/
+*.egg-info/
+*.tsbuildinfo
+output/
+tmp/
+artifacts/
+build/
+dist/
+dist-extension/
+playwright-report/
+test-results/
+*.pem
+*.key
